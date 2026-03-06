@@ -408,7 +408,7 @@ inventory.ini
 localhost
 
 [local:vars]	//when ansible targets local -- these variable will be printed
-COURSE: Ansible from inventory
+COURSE="Ansible from inventory"
 
 08-vars.yaml
 ============

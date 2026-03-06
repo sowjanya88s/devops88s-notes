@@ -1,0 +1,258 @@
+Linus File system heirarchy
+
+c disk -- left for OS
+
+go to root folder -- cd /
+
+in github -- check -- concepts repo -- for brief exaples 
+
+afs -- related to aws
+bin -> usr/bin -- softlink
+
+/bin -> essential user binaries/softwares/commands will be here
+1)ex: which ls
+/usr/bin/ls
+
+2)ls -l /bin/cp -- u can see file
+
+/boot -> when u power on a system either linux or windows, OS booting related commands or files will be here
+
+/dev -> means devices. everything in Linux is file including keyboard, mouse, disk, USB, etc.
+
+/etc -> extra configuration. Configurations related to system packages or user installed packages are here
+
+/home -> when u craete user ,any user related directories are here, /home/<username> hidden directories and files will be here related to user
+
+/lib and /lib64 -> libraries required for system related commands  are here..
+
+/media -> removable disks like usb, DVD, etc, are mounted here automatically in desktop environments
+firstly  devices like usb, DVD, etc, will be mounted in /dev only
+later they come to /media for usage 
+disk is also mounted intially at /dev
+later we mount them on our required path
+
+/mnt -> used to mount extra disks in linux server are here for temp purpose
+
+/opt -> optional. when you installed a software manually(ex-- by using arepo) you do it here. /opt/roboshop, /opt/tomcat, /opt/jobss etc.
+
+/proc -> processor id information, /proc/cpuinfo, /proc/meminfo. running process info is here related to kernel
+ls -l /proc
+
+/root -> root user home directory
+
+/run -> all running process information -- except kernel
+
+/sbin -> essential root user binaries/softwares/commands will be here
+
+/srv -> in olden days service, data related to system like HTML directory, NFS directory, etc. ex -- /srv/www , /srv/nfs
+
+in recent days the RAM in mobiles are getting from 8GB to 16GB. they take some memory from HD and that will be used in RAM
+/swap -> virutal RAM. swap usage is more means system is under stress and there is some problem
+
+/sys -> known as sys file system and it contains information about hardware devices, drivers and kernel sub systems
+
+/tmp -> temporary directory in linux. it contains non imp files
+
+/usr -> user related commands and libraries/binaries are here. any applications or commands only required for a particular user should be installed here
+
+/var -> variable files, continously growing files (ex - log files) are here
+
+Hard Disk vs Network Disk
+=========================
+hard disk near to comupter
+network disk, any where in the internet like google drive, Microsoft drive, S3, etc..
+
+compared to network disk HD acts fast and latency is less
+so place OS, DB always should be in HD
+normal files and objects are stored in network storages
+
+at a time one HD can be mounted to only one computer.
+Network storages can be attached to multiple computers
+
+
+How to add extra disk to Linux server
+=====================================
+when u have HD of 20GB and it is full and what we have to do
+we perform cleaning but by that only little amount of space came
+so for safety purpose we have to add a new disk
+
+1. create EBS(Elastic Block storage) volume
+2. attach to the instance, EBS volume should in the same AZ as EC2 (while attaching volume -- select instance and any device name)
+
+creation of volume :
+
+EC2 -- volumes -- create volume -- 
+general purpose SSD (gp3) (in olden days they store data in magnetic tapes)
+size -- 20 Gb
+az should be same as server az
+create voulme --wait until it comes to ready state
+
+now select the volume -- attach the disk to required instance -- attach volume
+
+3. list the block devices, you can see newly attached disk
+now connect to instance 
+lsblk -- list block devices(memory is in blocks)
+
+nvme0n1 -> root disk -> OS default purpose
+if server crashes this root will be affected. extra disks doesn't affects
+nvme1n1 -> new disk -> database data, imp files and configurations are stored here..
+if there is a problem in server , we attach this disk to another server
+
+4. create partition from the disk
+sudo parted /dev/nvme1n1 --script mklabel gpt mkpart primary 0% 100% n
+mkpart primary 0% 100% n -- means single partition will be created
+--script -- runs non-interactively(safe for automation)
+mklabel -- creates GUID partition table
+GPT is the modern standard
+
+after running this command give lsblk command u should see the partition
+
+now we have to create file system
+usually data in system is stored in 0's and 1's
+when u install file system the data will be shown in human readable format
+xfs -- recent best file system
+sudo mkfs.xfs -f /dev/nvme1n1
+
+db data is stored in tables and columns and also it is stored in /var/lib/mysql in HD
+/var/lib/mysql -> mysql data is stored here
+/data -> redis
+we have to take backup of /var/lib/mysql
+now create a directory
+mkdir -p /data
+-p -- if not exists create directory otherwise don't
+now we mount the partition to /data 
+this means when data comes to /var/lib/mysql save that to /data
+mount /dev/nvme1n1 /data
+
+df -hT
+u should see
+/dev/nvme1n1 20G /data
+
+this process is temporary, when the system reboots it will go away(i.e formatting with file system & making partition & mounting disk to a directory)
+
+so make this permanent we have to make entry in fstab
+blkid -- block id command will give universal id for the block(UUID)
+-- blkid /dev/nvme1n1
+UUID="0683949b-ce15-4d77-b202-4d47ee2a863a"
+
+when the linux system starts it will check the entries in fstab and loads them into the server
+
+make entry in fstab like below
+
+vi /etc/fstab
+UUID=0683949b-ce15-4d77-b202-4d47ee2a863a   /data   xfs   defaults,nofail   0   2
+
+means mount everything
+sudo mount -a
+
+the above process will creates only one partition 0f 20gb
+
+process to create 2 partitions
+this will creates one partition of 10gb from 20gb
+sudo parted /dev/nvme1n1 --script mklabel gpt mkpart primary 0% 50% 100%
+
+to check how much free space available in that 20gb disk
+sudo parted /dev/nvme1n1 print free
+
+
+Used parted to create partition 2 in remaining free space:
+
+sudo parted /dev/nvme1n1 --script mkpart primary 10.7GB 100%
+
+This will  create:
+
+/dev/nvme1n1p2
+
+Since partition 1 was using XFS, you formatted partition 2 with XFS:
+sudo mkfs.xfs /dev/nvme1n1p2
+ 
+ Created Mount Point
+sudo mkdir /data2
+
+ Mounted Partition
+sudo mount /dev/nvme1n1p2 /data2
+
+Verify with:
+
+lsblk
+df -h
+
+Result:
+
+nvme1n1
+├─nvme1n1p1   10G  /data
+└─nvme1n1p2   10G  /data2
+
+Got UUID:
+
+sudo blkid /dev/nvme1n1p2
+
+Add to /etc/fstab:
+
+UUID=<uuid>  /data2  xfs  defaults,nofail  0 0
+
+Tested with:
+
+sudo mount -a
+
+now i have extended the disk from 20GB to 35GB
+After Disk Resize (20G → 35G)
+
+Current layout:
+
+p1 → 10G
+p2 → 10G
+15G free space remaining
+
+Partition 1 cannot grow because partition 2 is blocking it.
+
+You can: Grow p2 (recommended), ORCreate p3, OR
+
+i have extended second partition with below commands 
+
+process to extend 2nd partition
+growpart /dev/nvme1n1 2
+
+xfs_growfs /data2 (because 2nd partition mounted to /data2)
+
+now check partition status by using -- df -hT /data -- command
+
+
+
+memory usage commands
+=====================
+df -hT -> disk information
+free -m or free -h -> RAM usage (h -- human readable format)
+
+top -- %RAM %memory and their pid
+
+install htop -- human readable format
+command -- htop
+
+top 10 ids with their %mem & %CPU usage
+ps aux --sort -rss | head -10
+
+memory occupied by files and folders , goto required folder
+du -sh *
+we can see memory occupied each and every file and folder in the given folder
+
+expand the already existing disk
+================================
+select instance -- storage -- check disk id 
+goto volumes -- select the disk -- modify -- 35gb (means ur disk will be increased by 15gb)
+wait until it comes to available state
+go to instance 
+-- lsblk
+u can see disk will be extended but partition remains same
+we should manually increase the partition
+
+
+growpart /dev/nvme1n1 1
+by above command partition will be extended
+
+manually we have to mount the 15gb disk , do that by using  below command
+xfs_growfs /data
+
+now check partition status by using -- df -hT /data -- command
+
+***for more info regarding this class check directory concepts in GitHub.com/daws-88s

@@ -1,0 +1,128 @@
+facebook.com
+google.com
+when u enter a domain name at first it checks
+browser cache --> temporary memory
+os --> checks os cache --> ISP(internet service provider) --> ISP DNS resolver --> DNS cache --> responsible to get IP address for the domains
+if not available dns resolver contacts with near by root servers
+root servers providers gives TLD information --> godaddy (or domain registars) --> provides ip of that domain
+
+Root servers -> there are 13 root servers in the world formed by different organisations -> main responsibility is dns resolution
+
+these root servers are maintained by different companies at different locations
+
+these root servers controls Domain information and TLD information
+
+TLD -> top level domains
+
+.com --> managed by verisign
+.us
+.in --> managed by verisign
+.uk
+.net
+.org
+.edu
+.co
+.ai
+.shop
+.online
+
+these TLD's are maintained by different companies
+
+when u purchase any domain from TLD information goes there
+
+What happens if we buy the domain?
+
+godaddy, hostinger, aws, gcp, azure, etc... -->brokers
+
+if u want to purchase a domain named --> joindevops.com 
+1. availability check -> brokers check with TLD owner is that domain available or not?
+2. if available, collect the details name, company, address, mobile, email id, payment info, etc.
+3. when we complete payment, godaddy updates TLD about buyer details and domain details..
+
+4. now we have to match the domain with ip address. create one A record against the domain
+
+joindevops.com A 167.89.87.23
+domains are managed by brokers
+
+update anything in your domain it propagates to TLD..
+
+Root servers
+=============
+tracks all the TLD and their addresses..
+
+if u want to start a TLD like .siva , they will check
+1. how many servers?
+2. what is our infra capacity
+3. how much funding we have
+
+root servers are managed by ICANN ,so to start a TLD we need to submit the application to ICANN
+
+I need to approach popular domain registars like godaddy, hostinger, etc.
+
+Root servers has TLD information...
+
+
+Browser -> Cache -> OS -> Cache -> ISP DNS Resolver -> Cache -> Root servers -> TLD information -> Contact TLD -> godaddy -> it will now fetch A record for us
+
+ibomma ravi --> ED -> 
+Local police -> MOEA -> MOHA -> Interpole police -> US courts -> Porkbun
+
+Domain registars -> Porkbun
+We can change domain authority to another company
+
+goto hostinger and purchase a domain for practice purpose
+
+Tuvalu Gov -> .tv
+.in --> managed by Indian gov -> money goes to Indian government
+ivs.tv -> video advertising company
+
+NS -> Name servers
+
+after purchase of domain --> turn off auto renewal --> they provide 2 default NS
+ --> now we have to change the name servers here --> goto aws --> route 53 --> we will manage our domain here
+
+hosted zone is nothing but domain management transfer
+domain is managed by name servers
+
+route 53 --> hosted zone -- create hosted zone -- give ur domain name -- public hosted zone --> create hosted zone
+
+
+NS -- Who is managing the domain, who is responsible to provide IP address..
+
+in hostinger --> we have to place the name servers of aws after creation of hosted zone and save them in hostinger
+
+aws provides 4 name servers because if one NS is down it will be managed by other NS's
+
+to update the info of name servers at TLD it takes max 24 hours to min 1 hour
+
+DNS Records
+===============
+TTL -> Time to Live -> How much time to live in cache or How much time to update
+A -> Holds the IP address of your domain
+
+if u keep on changing the ip address u have to keep TTL low -- 1sec
+if u put it as 1sec -- disadvantage here is dns resolution takes time
+
+in hostinger low TTL -- 60 sec
+
+usually everyone keeps TTL as 3600S
+
+todo major changes atleast 1 day before reduce TTL to 1sec
+
+once everything is fine, take TTL back to 3600
+
+goto AWS hosted zone -- create A record -- give ur server public ip here -- TTL -- 1 sec -- create
+
+to check this use nslookup command -- nslookup domain-name -- u should see ur public ip here 
+
+What are root servers?
+What are TLD
+What are domain registars?
+What are nameservers?
+WHat is A record?
+
+Book a domain
+temp -> hostinger -> .online
+perm -> go daddy
+
+sowjanya.fun --> domain purchased

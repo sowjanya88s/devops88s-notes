@@ -1,0 +1,200 @@
+
+Database Interview Preparation (SQL, RDBMS, NoSQL)
+
+
+
+What is a Database?
+A database is an organized collection of data stored electronically that can be accessed, managed, and updated efficiently.
+
+
+What is RDBMS?
+RDBMS (Relational Database Management System) is software that stores data in **tables (rows and columns)** and maintains relationships between tables using keys.
+Key Points to Mention:
+* Data stored in tables
+* Uses Primary Key and Foreign Key
+* Supports ACID properties (A – Atomicity ,C – Consistency,I – Isolation,D – Durability)
+* Uses SQL for operations
+
+ Examples:
+
+* MySQL
+* PostgreSQL
+* Microsoft SQL Server
+* Oracle Database
+
+
+What is SQL?
+
+**Answer:**
+SQL (Structured Query Language) is a standard language used to communicate with an RDBMS to perform database operations.
+
+### Main SQL Commands:
+
+* `SELECT` – Retrieve data
+* `INSERT` – Add data
+* `UPDATE` – Modify data
+* `DELETE` – Remove data
+* `CREATE` – Create tables/databases
+* `DROP` – Delete tables/databases
+
+Example:
+
+```sql
+SELECT * FROM employees;
+```
+
+ Important Interview Point:
+
+SQL is declarative — you specify **what** you want, not **how** to get it.
+
+
+
+What is the difference between DBMS and RDBMS?
+
+| DBMS                 | RDBMS                  |
+| -------------------- | ---------------------- |
+| Stores data as files | Stores data in tables  |
+| No relationships     | Supports relationships |
+| Less secure          | More secure            |
+| No foreign keys      | Supports foreign keys  |
+
+
+
+What are Primary Key and Foreign Key?
+
+**Primary Key:**
+
+* Uniquely identifies each record
+* Cannot be NULL
+* No duplicates
+
+**Foreign Key:**
+
+* Links one table to another
+* References Primary Key of another table
+
+
+
+What is NoSQL?
+NoSQL (Not Only SQL) is a non-relational database system designed for scalability, flexibility, and large-scale data handling.
+
+Why Use NoSQL?
+
+* Big data
+* Real-time applications
+* Flexible schema
+* Horizontal scaling
+
+
+Types of NoSQL Databases
+
+### Document Database
+
+Example: MongoDB
+
+### Key-Value Store
+
+Example: Redis
+
+### Wide-Column Store
+
+Example: Apache Cassandra
+
+### Graph Database
+
+Example: Neo4j
+
+
+
+SQL vs NoSQL (Common Interview Question)
+
+| SQL                      | NoSQL                        |
+| ------------------------ | ---------------------------- |
+| Structured tables        | Flexible schema              |
+| Vertical scaling         | Horizontal scaling           |
+| ACID compliant           | Often BASE model             |
+| Best for structured data | Best for large, dynamic data |
+
+
+# ?? Quick 30-Second Interview Summary
+
+> RDBMS stores structured data in tables and uses SQL for querying.
+> SQL is the language used to manage relational databases.
+> NoSQL databases are non-relational and designed for scalability and flexible data structures.
+
+
+
+Great interview question ??
+
+When we say an **RDBMS supports ACID properties**, it means it guarantees **reliable and safe transactions**.
+
+ACID stands for:
+
+> **A – Atomicity**
+> **C – Consistency**
+> **I – Isolation**
+> **D – Durability**
+
+Let’s explain each clearly with examples.
+
+
+# ?? 1?? Atomicity (All or Nothing)
+
+A transaction must **complete fully or not happen at all**.
+ Example:
+
+Imagine transferring ?1000 from Account A to Account B:
+
+* ?1000 deducted from A
+* ?1000 added to B
+
+If the system crashes after deducting but before adding, the whole transaction is rolled back.
+
+? Either both steps happen
+? Or none happens
+
+No partial updates allowed.
+
+
+Consistency (Valid State to Valid State)
+
+After a transaction, the database must remain **correct and follow all rules (constraints).**
+
+ Example:
+
+If a table rule says:
+
+* Balance cannot be negative
+
+Then a transaction that makes balance -500 will be rejected.
+
+? Data always follows defined rules
+? Constraints are maintained
+
+Isolation (Transactions Don’t Interfere)
+
+Multiple transactions running at the same time should not affect each other incorrectly.
+
+ Example:
+
+Two people booking the last train ticket at the same time.
+
+Isolation ensures:
+
+* Only one person successfully books it
+* The other transaction fails or waits
+
+Each transaction behaves as if it runs alone.
+
+
+Durability (Permanent Changes)
+
+Once a transaction is committed, it will **remain saved permanently**, even if:
+
+* Power failure
+* System crash
+
+The data is stored safely in disk logs.
+
+
+

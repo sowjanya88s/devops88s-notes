@@ -1,0 +1,529 @@
+shell doesn't exits if anything goes wrong. its our responsibility to check what happened with previous command with exit status
+yesterday we have executed a sample script to install a package
+now we will write a script which installs multiple packages
+
+10-installation.sh
+------------------
+#!/bin/bash
+
+USERID=$(id -u)
+
+if [ $USERID -ne 0 ]; then
+    echo "Please run this script with root user access"
+    exit 1
+fi
+
+echo "Installing Nginx"
+dnf install nginx -y
+
+if [ $? -ne 0 ]; then
+    echo "Installing Nginx ... FAILURE"
+    exit 1
+else
+    echo "Installing Nginx ... SUCCESS"
+fi
+
+dnf install mysql -y
+
+if [ $? -ne 0 ]; then
+    echo "Installing MySQL ... FAILURE"
+    exit 1
+else
+    echo "Installing MySQL ... SUCCESS"
+fi
+
+dnf install nodejs -y
+
+if [ $? -ne 0 ]; then
+    echo "Installing nodejs ... FAILURE"
+    exit 1
+else
+    echo "Installing nodejs ... SUCCESS"
+fi
+
+command to execute script -- sudo sh 10-installation.sh
+
+output
+------
+3 packages will be installed and output will be shown
+
+36 lines of code for installing 3 packages is not good
+to avoid repitition -- in validation code
+we can create a function for validate
+
+functions/methods
+===================
+functions are intended to complete specific task, it takes input and does the job
+
+syntax:
+-------
+FUNC_NAME(){
+	$1, $2
+	code
+}
+bydefault shell doesn't executes, function will be executed when we call
+whenver required we can call that function and we can pass parameters to the function
+
+FUNC_NAME parameter-1 parameter-2
+inside the function they will be treated as $1 , $2
+
+in program we are writing validate function below installation command like this
+dnf install nginx -y
+validate $? "nginx installation"
+here $? -- exit status of previous command -- this will be treated as $1 in validation function
+what we have done -- nginx installation -- this will be treated as $2 in validation function
+so we are passing those 2 parameters
+
+11-functions.sh
+---------------
+#!/bin/bash
+
+USERID=$(id -u)
+
+if [ $USERID -ne 0 ]; then
+    echo "Please run this script with root user access"
+    exit 1
+fi
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo "$2 ... FAILURE"
+        exit 1
+    else
+        echo "$2 ... SUCCESS"
+    fi
+}
+
+dnf install nginx -y
+VALIDATE $? "Installing Nginx"
+
+dnf install mysql -y
+VALIDATE $? "Installing Mysql"
+
+dnf install nodejs -y
+VALIDATE $? "Installing nodejs"
+
+command to execute script -- sudo sh 11-functions.sh
+
+output
+------
+3 packages will be installed and output will be shown
+
+when we write an automation script -- to check what happened with it -- logs are very important
+
+
+redirections
+=============
+ls -l > output.txt -- output will be redirected to output.txt
+lsfsa -l 1> output.txt -- success output will be redirected to output.txt
+lsfsa -l 2> output.txt -- failure output will be redirected to output.txt
+lsfsa -l &> output.txt -- both success & failure output will be redirected to output.txt
+1 -> success
+2 -> failure
+
+>> - append (to avoid override)
+usually logs will be stored in /var/log
+
+create directory to store logs -- mkdir -p /var/log/shell-script 
+-p -- ignores if directory already exists
+
+12-logs.sh
+-----------
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-script"
+LOGS_FILE="/var/log/shell-script/$0.log"
+
+if [ $USERID -ne 0 ]; then
+    echo "Please run this script with root user access" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo "$2 ... FAILURE" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo "$2 ... SUCCESS" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf install nginx -y &>> $LOGS_FILE
+VALIDATE $? "Installing Nginx"
+
+dnf install mysql -y &>> $LOGS_FILE
+VALIDATE $? "Installing Mysql"
+
+dnf install nodejs -y &>> $LOGS_FILE
+VALIDATE $? "Installing nodejs"
+
+commad to execute -- sudo sh 12-logs.sh
+
+output
+------
+installing nginx ... success
+installing mysql ... success
+installing nodejs ... success
+
+tee command -- reads standard input and writes it simultaneously to both standarad output(on screen) and one or more files
+don't do any write operations inside git repo
+
+ls -l | tee output.txt
+tee -a $LOGS_FILE -- -a -- append
+
+
+loops
+=======
+i want to print numbers from 1 to 10
+
+syntax:
+-------
+for (int i=0;i<10;i++){
+	print i;
+}
+
+initially i value is 0 -- 0<10 -- prints 0
+initially i value is 1 -- 1<10 -- prints 1
+....
+initially i value is 10 -- 10<10 -- exits
+
+we use for loop -- for readability and to decrease no.of lines of code
+
+writing of simple for loop in shell script
+
+basic-for-loop.sh
+=================
+#!/bin/bash
+
+for i in {1..100}
+do
+echo $i
+done
+
+execute command -- sh basic-for-loop.sh
+prints 1 to 100 as output
+
+$@ -- takes parameters passed to script one by one
+
+upto now we are bindly installing the package. instead of that we can check whether the given package is installed , if it is installed skip it
+if not installed then install it now
+
+for that we can run
+dnf list installed nginx
+$? -- 0 -- already installed
+$? -- 1 -- not installed
+
+14-loops.sh
+===========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-script"
+LOGS_FILE="/var/log/shell-script/$0.log"
+
+if [ $USERID -ne 0 ]; then
+    echo "Please run this script with root user access" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo "$2 ... FAILURE" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo "$2 ... SUCCESS" | tee -a $LOGS_FILE
+    fi
+}
+
+for package in $@ 
+do
+    dnf list installed $package &>>$LOGS_FILE
+    if [ $? -ne 0 ]; then
+        echo "$package not installed, installing now"
+        dnf install $package -y &>>$LOGS_FILE
+        VALIDATE $? "$package installation"
+    else
+        echo "$package already installed, skipping"
+    fi
+done
+
+command to execute -- sudo sh 14-loops.sh gcc python3-devel
+
+output
+=======
+gcc not installed , installing now
+gcc installation .. success
+python3-devel not installed , installing now
+python3-devel installation .. success
+
+if u run above script again
+output
+------
+gcc already installed, skipping
+python3-devel already installed, skipping
+
+bydefault in linux success is printed in green clour and failure is printed in red colour and skipping is printed in white colour
+there are colours in linux for that there are colour codes like below
+e -- enable
+'\e[31m'
+R -> 31
+G -> 32
+Y -> 33
+B -> 34
+default or white -> 0
+
+16-colors.sh
+------------
+#!/bin/bash
+
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+echo -e "$R Hello World $N, $Y I am learning Linux $N"
+
+command to execute -- sh 16-colors.sh
+
+output
+------
+
+hello world -- green color
+,- in white
+I am learning Linux -- yellow color
+
+17-colors.sh
+-------------
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-script"
+LOGS_FILE="/var/log/shell-script/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+for package in $@ # sudo sh 14-loops.sh nginx mysql nodejs
+do
+    dnf list installed $package &>>$LOGS_FILE
+    if [ $? -ne 0 ]; then
+        echo "$package not installed, installing now"
+        dnf install $package -y &>>$LOGS_FILE
+        VALIDATE $? "$package installation"
+    else
+        echo -e "$package already installed ... $Y SKIPPING $N"
+    fi
+done
+
+command to execute -- sh 17-colors.sh mysql
+
+output
+------
+mysql already installed ...(in white) skipping(in yellow color)
+
+
+error handling
+==============
+instaed of writing validate command everytime we can use
+set -e -- checks for errors , if there are errors it will exit
+we can remove validate line or comment it and then no.of lines in code decreases
+
+18-set.sh
+----------
+#!/bin/bash
+
+set -e
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-script"
+LOGS_FILE="/var/log/shell-script/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+for package in $@ # sudo sh 14-loops.sh nginx mysql nodejs
+do
+    dnf list installed $package &>>$LOGS_FILE
+    if [ $? -ne 0 ]; then
+        echo "$package not installed, installing now"
+        dnf install $package -y &>>$LOGS_FILE
+        #VALIDATE $? "$package installation"
+    else
+        echo -e "$package already installed ... $Y SKIPPING $N"
+    fi
+done
+
+command to execute -- sudo sh 14-loops.sh nginx nginfad
+
+output
+-------
+ngnix already installed .... skipping
+
+script exited somewhere , we don't know where it stopped execution
+
+goto logs folder to check it --- less /var/log/shell-script/18-set.sh
+u can see no matching package to list 
+
+by using set script exited but we can't know what is happening there
+
+so use validate statement , it has 2 advantages
+1.it checks
+2.we trace where we are
+
+we can also use trap along with set
+
+trap 'command(s)_to_run' ERR
+
+by this we can find error came in which line and what is the error
+
+19-trap.sh
+----------
+#!/bin/bash
+
+set -e #exit when error came
+
+trap 'echo "There is an error in $LINENO, Command: $BASH_COMMAND"' ERR #setting trap with ERR signal
+
+echo "Hello World"
+echo "I am learning Shell"
+echoo "printing error here" #echoo spelling error
+echo "No error in this"
+
+command to execute -- sh 19-trap.sh
+
+output
+------
+Hello World
+I am learning Shell
+there is an error in <line-no> , command: echo "printing error here"
+
+
+by placing echo statement we will know where we are
+
+trap is a shell built in that defines and activates handlers to execute commands when the shell receives a specific signal or condition
+remove validate completely and modify the script
+
+20-trap.sh
+----------
+#!/bin/bash
+
+set -e
+trap 'echo "There is an error in $LINENO, Command: $BASH_COMMAND"' ERR
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-script"
+LOGS_FILE="/var/log/shell-script/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+for package in $@ # sudo sh 14-loops.sh nginx mysql nodejs
+do
+    dnf list installed $package &>>$LOGS_FILE
+    if [ $? -ne 0 ]; then
+        echo "$package not installed, installing now"
+        dnf install $package -y &>>$LOGS_FILE
+    else
+        echo -e "$package already installed ... $Y SKIPPING $N"
+    fi
+done
+
+command to execute -- sudo sh 20-trap.sh mysql ngfdh nginx
+
+output
+-------
+mysql already installed ...... skipping
+there is an error in 23, command: dnf installed $package &>> $LOGS_FILE
+
+by above script we can't get success (if it installed now) in the output and we can't know whether nginx is installed or not
+
+by placing validate function in the program we can understand the flow of the script
+
+according to performance level trap and validate are good
+
+
+up to now,
+aws account  -- communication or connected -- UI console
+we can connect with CLI -- authentication will be there here also -- only commands
+SDK (software development kit) -- it hits AWS -- AWS developed API's -- SDK like a dependancy library -- SDK developed for programs
+console or CLI or SDk -- all are using API's only
+this API can be developed using any programming language -- it can be python , java, nodejs , .NET
+by installing these libraries we can directly connect with AWS API -- by that we can connect to AWS 
+by using terraform also we can hit AWS that is also by using API
+in any method we have to authenticate
+
+in console to create instance -- we will select the ami id & security group & instance id & subnet id & etc
+
+command to create instance on command line:
+
+aws ec2 run-instances \
+    --image-id ami-xxxxxxxxxxxxxxxxx \
+    --instance-type t2.micro \
+    --key-name MyKeyPairName \
+    --security-group-ids sg-xxxxxxxxxxxxxxxxx \
+    --subnet-id subnet-xxxxxxxxxxxxxxxxx \
+    --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=MyDemoInstance}]'
+
+by using command we can create instance within seconds
+	
+we will get the output, get public ip
+
+then run another command to update r53 records
+
+to configure roboshop , we create 
+ec2 instance , 
+r53 records, by placing commands related to them in a shell script we can create them
+
+roboshop.sh --  we r passing mongodb redis catalogue
+lopps through the arguments
+create mongodb instance
+update mongodb record
+create redis instance
+update redis record

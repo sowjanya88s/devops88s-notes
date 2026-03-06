@@ -1,0 +1,308 @@
+process to send mail regarding disk utilization
+
+we can't send mails using text
+to send in format through web -- we should use html or css or javascript
+text-html.com -- if we give text to it , it gives html
+
+text 
+hi devops team,
+
+there is an issue of disk-utilization in the server. pls find details the below
+server ip: server-ip
+message
+
+regards,
+monitoring team
+
+alert type , ip , message -- these are place holders
+by using sed editor we can replace them
+
+create template.html file and write given html code there
+
+yesterday we have written code for disk usage
+
+to send mail , write mail.sh by this file we can send mails regarding different issues 
+for example - by using mail.sh -- we can send mails for disk utilization , cpu utilization etc
+pass inputs to mail.sh dynamically
+
+to trigger mail we need to-address , server-ip , alert-type , subject , message body , to-team
+
+to get ip address of server where disk usage is greater than threshold
+generally in aws there is a feature called metadata for instance
+
+search -- ec2 metadata ip address
+by running below command in any instance we can get metadata of that instance (this is an API)
+curl http://169.254.169.254/latest/meta-data/
+in output u can see so many details regarding instance
+in those use local-ipv4
+curl http://169.254.169.254/latest/meta-data/local-ipv4
+this shows private ip of ur instance
+
+now we have to trigger mail
+
+sh mail.sh "<to-mail>" "<subject>(ex: high disk usage on ipv4" "<message" "disk usage" "to_team"
+after sending these details from disk-usage.sh they will goto mail.sh
+
+disk-usage.sh
+==============
+#!/bin/bash
+
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+MESSAGE=""
+IP_ADDRESS=$(curl http://169.254.169.254/latest/meta-data/local-ipv4)
+
+log(){
+    echo -e "$(date "+%Y-%m-%d %H:%M:%S") | $1"
+}
+
+DISK_USAGE=$(df -hT | grep -v Filesystem)
+USAGE_THRESHOLD=3
+
+while IFS= read -r line
+do
+    USAGE=$(echo $line | awk '{print $6}' | cut -d "%" -f1)
+    PARTITION=$(echo $line | awk '{print $7}')
+
+    if [ "$USAGE" -ge "$USAGE_THRESHOLD" ]; then
+        MESSAGE+="High Disk usage on $PARTITION: $USAGE% <br>"
+    fi
+done <<< $DISK_USAGE
+
+echo -e "$MESSAGE"
+
+sh mail.sh "info@joindevops.com" "High Disk Usage Alert on $IP_ADDRESS" "$MESSAGE" "HIGH_DISK_USAGE" "$IP_ADDRESS" "DevOps Team"
+
+command to execute -- sh disk-usage.sh
+
+
+in mail.sh -- we have to write final-body
+use sed editor for formatting of message
+use sed -- for temporary changes 
+if u use sed -i -- other teams can't use this final-message
+todo multiple changes -- use -e in sed editor 
+these all changes should be done in template.sh
+we r sending raw text, message body slashes & sed editor substitution slashes will get confused to avoid that we have to escape them
+search -- escaping special characters (slashes) in shell script
+for that we have to use --  sed -e 's/[]\/$*.^[]/\\&/g'
+take variable final-message-body -- give message body with pipe to it 
+\n -- new line shell script
+<br> -- new line in html
+finally we r sending alert to mail using html 
+
+mail.sh
+========
+#!/bin/bash
+TO_ADDRESS=$1
+SUBJECT=$2
+MESSAGE_BODY=$3
+ALERT_TYPE=$4
+SERVER_IP=$5
+TO_TEAM=$6
+FINAL_MESSAGE_BODY=$(echo $MESSAGE_BODY | sed -e 's/[]\/$*.^[]/\\&/g')
+
+FINAL_MESSAGE=$(sed -e "s/TO_TEAM/$TO_TEAM/g" -e "s/ALERT_TYPE/$ALERT_TYPE/g" -e "s/SERVER_IP/$SERVER_IP/g" -e "s/MESSAGE/$FINAL_MESSAGE_BODY/g" template.html)
+
+{
+echo "To: $TO_ADDRESS"
+echo "Subject: $SUBJECT"
+echo "Content-Type: text/html"
+echo ""
+echo "$FINAL_MESSAGE"
+} | msmtp "$TO_ADDRESS"
+
+template.html
+=============
+<p>Hi DevOps Team,</p>
+<p>&nbsp;</p>
+<p>There is an issue of <strong><span style="color: #993300;">DISK_UTILISATION</span> </strong>type in the server. Please find the details below.</p>
+<p>Server IP: SERVER_IP</p>
+<p><strong><span style="color: #993300;">MESSAGE</span></strong></p>
+<p>&nbsp;</p>
+<p>Regards,</p>
+<p>Monitoring Team</p>
+
+
+like this they have sent mails in 2012
+now we have monitoring tools
+
+in git -- check assignments repo --  of shell scripts  -- practice them
+
+Disadvantages
+=============
+1. no idempotency
+2. No error handling
+3. Little complex
+4. Large scale servers handling is tough
+5. Distribution specific, homogenous (if we write for ubuntu it does not works for rhel)
+
+from this shell scripting a format came
+that format is used by ansible in the background
+
+create two instances
+
+without logging into server
+logging to node server from shell scripting server
+ssh ec2-user@<ip-of-node-server> 'touch /tmp/shell.txt'
+
+now login to node-server -- cd /tmp -- u can see shell.txt
+
+command to copy files from one server to another server
+scp  mongo.repo mongodb.sh ec2-user@<node-ip>:/tmp
+
+execute them
+ssh ec2-user@<node-ip> 'cd /tmp && sudo sh mongodb.sh'
+mongodb.sh script will be executed there from shell server
+
+if we have 100 servers we can put ip addresses  in loop -- this can take upto hours -- by using parallel processing we can decrease the time taken to do that task
+but by this complexity increases by managing ip addresses and parallel processing
+
+
+while using one tool --  if complexity rises -- that is the idea for next tool 
+those complexities will be handled by Ansible -- its a configuration management tool
+
+
+Configuration management
+======================
+while provisioning server -> plain server -> baseline it according to our needs
+for that we need todo
+1. Installing programming language
+2. Creating system users and folders
+3. Installing some system packages
+4. Downloading code
+5. Installing dependencies
+6. Creating systemctl services
+7. Enable and starting the services
+
+after this only we can do application deployment in server -- this process is known as configuration management
+to manage this configuration
+CRUD -- creation, reading , updating and deletion the configuration
+
+documnetation of for each and everthing is not possible
+and even history command has some limitations
+
+so by doing everything using scripts is called config management as source code-- it will be saved in git history -- using shell is not easy
+for config mgmt we can use different tools like ansible -- but in background all tools uses shell only
+
+there are two types of config mgmt tools are there i.e pull and push
+
+Push vs Pull
+============
+HYD -> Delhi
+
+1. Person in Delhi go to DTDC office everyday and check for letter -- pull 
+2. Person stays home, DTDC delivers letter whenever it arrive -- this is the better option -- push
+
+in system design we have to make decision of push or pull
+
+pull method
+============
+config in a server is called config mgmt server
+nodes(or servers or boxes) connects to config server for every 30 mins and checks for new config changes , if changes comes the nodes have to download and install them for that we need a component called agent
+we need to install the agent in nodes and  we have to configure (where to check for updates) them
+
+config mgmt --> connects to nodes
+disadvantages
+1. unnecessary installation (agent software needs some resources , there will be updates in agent software too)
+2. resource wastage (updates doe not comes for 30 mins)
+3. unnecessary traffic
+4. no adhoc updates (if update comes after 31 minutes we have to wait for 29 minutes to do it)
+5. agent connects to config server here we have to write new protocol to connect to sever and to download updates, need to open seperate port and resources are needed for installations
+in pull method previously used tools are chef , runtake , salstake
+
+later ansible became popular because of its push model
+
+push method
+============ 
+in config mgmt server , ansible uses ssh protocol 
+ansible pushes updates to remaining servers
+so agent is not required 
+no need to open new ports & no  unnecessary traffic & no resource wastage 
+so everyone started using push based approach
+
+ansible server or contol ---> connects to ansible nodes
+
+ansible installation
+=====================
+create 2 instances -- 1. ansible-server 2.node
+connect to ansible server -- install ansible in it
+yum install ansible -y
+ansible is command line tool there is no need to use systemctl start
+ansible is developed by using python came from redhat
+what we have done by using shell commands upto now can be done by using ansible
+to establish connection with server -- we need 
+protocol
+port
+username
+password
+IP
+
+command to connect to node using ansible server
+ansible -all -i <private-ip>, -e ansible_user=ec2-user -e ansible_password=<pwd> -m  ping
+output -- pong
+
+here -m means -- Linux commands == Ansible modules/collections
+
+ansible -all -i <private-ip>, -e ansible_user=ec2-user -e ansible_password=<pwd> -b -m  dnf -a "name=nginx state=installed"
+output -- installs nginx in node
+
+here -a means arguments
+here -b means become root user
+
+to run nginx in node
+ansible -all -i <private-ip>, -e ansible_user=ec2-user -e ansible_password=<pwd> -b -m  dnf -a "name=nginx state=started"
+
+
+output in yellow color -- command executed successfully and state changed
+red color -- error
+green -- command executed successfully but nothing changed
+
+in Linux Server STATE-1 -> STATE change STATE-2 (anything done additionally -- state changed)
+
+by handling everything using commands is not easy
+so now we place all commands of ansible in a file and that is called as playbook
+ansible playbook uses YAML language
+
+YAML -> Yet another markup language
+
+for any registration form
+we need to give some details
+
+data transfer objects carries data in some format
+for format we use forms and templates
+
+DTO -> data transfer objects
+============================
+key -- value
+name -> sivakumar
+acc no
+amount
+date
+branch
+denomination
+
+we have Markup languages
+================
+HTML (Hyper Text Markup Language), XML (Extensive Markup Language)
+
+when we place data in registaration form mark language take values like this sends to backend
+<Register>
+	<Name>Sivakumar</Name>
+	<Mobile>12345678</Mobile>
+	<Email>info@joindevops.com</Email>
+</Register>
+
+backend queries data from it
+
+
+
+JSON -- java script object notation -- programming language , for api's also we can use this
+
+YAML -- for scripting -- it's a markup language
+
+
+
+
+

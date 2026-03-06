@@ -1,0 +1,434 @@
+shell scripting -- linux native scripting
+scripting means -- 95% thinking + design 5% coding
+
+pseudo code -> no syntax, just assumption
+ex for pseudo code --- scenario --
+if today is sunday, enjoy the holiday otherwise go to school
+here ! means not equal to
+today=wednesday
+if(today != sunday){ //expression
+	print ("goto school") //if expression is true this will be printed
+}
+else{
+	print("take holiday, enjoy")  //if expression is false this will be printed
+}
+
+checking given number is even or odd : 15
+remainder = 15/2 -> 1
+if reminder is 0 -> even
+if reminder is 1 -> odd
+
+if(reminder == 0){
+	print("even number")
+}
+else{
+	print("odd number")
+}
+
+by seeing the output we can understand whether the given command is executed successfully or not
+
+any scripting or programming language contains thes --
+variables
+data types
+conditions
+functions
+loops
+error handling
+
+now we start how to write shell scripts
+let's write a conversation first -- 
+
+02-conversation.sh
+-------------------
+#!/bin/bash
+
+echo "Suresh:: Hello Ramesh, How are you?"
+echo "Ramesh:: Hi Suresh, I am fine thanks for asking. How are you doing?"
+echo "Suresh:: doing fine. What are you learning Ramesh?"
+echo "Ramesh:: I am learning Shell. What about you?"
+
+command to execute script -- sh 02-conversation.sh
+
+output
+-------
+Suresh:: Hello Ramesh, How are you?
+Ramesh:: Hi Suresh, I am fine thanks for asking. How are you doing?
+Suresh:: doing fine. What are you learning Ramesh?
+Suresh:: doing fine. What are you learning Ramesh?
+
+now i want to change the names of the person as trump and putin. for that we have to goto each and every line and we have to manually change the name
+in this case manual mistakes can happen and we should do the repeated work and it is difficult if we have 100 lines of conversation
+ 
+for ex: in maths , we assume let x=1, y=0
+we will derive the formula
+submit finally
+variables are like containers that holds something
+DRY -> Dont repeat yourself
+change in one place reflect everywhere you refer
+easy to maintain
+readable
+
+insead of that we can give the names of the person in variables
+like  PERSON1=Trump ,PERSON2=Putin
+
+while refering we should follow some sysntax
+i.e we should write like $VAR_NAME or ${VAR_NAME}
+when shell sees $ ,  text next to it will be considered as variable and the value of the variable will be submitted dynamically
+
+
+03-variables.sh
+----------------
+#!/bin/bash
+
+PERSON1=Trump # no space between value and =
+PERSON2=Putin
+
+echo "$PERSON1:: Hello $PERSON2, How are you?"
+echo "$PERSON2:: Hi $PERSON1, I am fine thanks for asking. How are you doing?"
+echo "$PERSON1:: doing fine. What are you learning $PERSON2?"
+echo "$PERSON2:: I am learning Shell. What about you?"
+
+command to execute script -- sh 03-conversation.sh
+
+output
+-------
+Trump:: Hello Putin, How are you?
+Putin:: Hi Trump, I am fine thanks for asking. How are you doing?
+Trump:: doing fine. What are you learning Putin?
+Putin:: doing fine. What are you learning Trump?
+
+
+we can pass variable value to the script dynamically during execution of script
+those values are called as arguments or parameters 
+then shell takes first value to $1 and second value to $2
+$1 , $2 are known as special variables
+
+command to execute -- sh 04-variables.sh trump putin
+
+04-variables.sh
+---------------
+#!/bin/bash
+
+PERSON1=$1 # no space between value and =
+PERSON2=$2
+
+echo "$PERSON1:: Hello $PERSON2, How are you?"
+echo "$PERSON2:: Hi $PERSON1, I am fine thanks for asking. How are you doing?"
+echo "$PERSON1:: doing fine. What are you learning $PERSON2?"
+echo "$PERSON2:: I am learning Shell. What about you?"
+
+output
+-------
+Trump:: Hello Putin, How are you?
+Putin:: Hi Trump, I am fine thanks for asking. How are you doing?
+Trump:: doing fine. What are you learning Putin?
+Putin:: doing fine. What are you learning Trump?
+
+passing variables dynamically on the prompt
+by this everyone can see confidential information on screen like passwords
+to avoid that
+
+we are asking variable values on prompt
+after entering username the read command takes the input provided by us and assigns that value to the variable username
+by using read -s -- the input we entered doesn't visible on the console passwords are confidential
+we can test password  it by printing it
+
+
+05-variables.sh
+----------------
+#!/bin/bash
+
+echo "Please Enter your username::"
+read USER_NAME
+
+echo "User name is $USER_NAME"
+
+echo "Please enter your password::"
+read -s PASSWORD
+
+echo "Password is $PASSWORD"
+
+command to execute -- sh 05-variables.sh 
+
+output
+-------
+Please Enter your username::
+sowjanya
+
+User name is sowjanya
+
+Please enter your password::
+
+
+Password is sowji123
+
+now let's see how to dynamically execute a command and take tha value into a variable
+time when script execution starts
+$date -- shows time with date hours minutes secs in UTC 
+time when script execution ends
+by the difference between start and end we can tell the required time to execute the script
+to caluclate the difference we need only digits (numeric format)
+sleep 10 -- for 10 sec we can't do anything on terminal
+first brace is for 9 mathematics
+second brace is for command execution
+
+date %s -- shows the time in seconds
+
+06-variables.sh
+---------------
+#!/bin/bash
+
+START_TIME=$(date +%s)
+
+echo "Script executed at: $START_TIME"
+
+sleep 10
+
+END_TIME=$(date +%s)
+TOTAL_TIME=$(($END_TIME-$START_TIME))
+
+echo "Script executed in: $TOTAL_TIME seconds"
+
+command to execute -- sh 06-variables.sh
+
+output
+------
+script executed at: <secs>
+script executed in : 10 
+
+
+Special variables
+=================
+$1 $2 ... $N args passed to script
+
+All variables passed to script: $@
+Number of variables passed to script: $#
+Script name: $0
+Present which directory you are in: $PWD
+Who is running this script: $USER
+Home direcory of the user: $Home
+PID of the script: $$
+sleep 100 & -- this will be executed in background
+Background process id: $!
+Exit status of previous command: $?
+
+$@ vs $*
+=========
+if u give 100 variables
+$@ treats arguments seperately
+$* treats as single argument
+
+in scripts we use $@ generally
+
+07-variables.sh
+---------------
+#!/bin/bash
+
+echo "All args passed to script: $@"
+echo "Number of vars passed to script: $#"
+echo "Script name: $0"
+echo "Present directory: $PWD"
+echo "Who is running: $USER"
+echo "Home directory of current user: $HOME"
+echo "PID of this script: $$"
+sleep 100 &
+echo "PID of recently executed background process: $!"
+echo "All args passed to script: $*"
+
+command to execute -- sh 07-variables.sh suresh ramesh
+
+
+output
+------
+All args passed to script: suresh ramesh
+Number of vars passed to script: 2
+Script name: 07-variables.sh
+Present directory: /home/ec2-user/shell-ecript
+Who is running: ec2-user
+Home directory of current user: /home/ec2-user
+PID of this script: <process-id>
+PID of recently executed background process: <process-id>
+All args passed to script: suresh ramesh
+
+data types
+==============
+variables are holding data..
+there will be different types of data
+
+mobile number -> contains only numbers
+different format of integars
+        integers -> range is -33,768 -> 33,768
+	float -> 45.90
+	decimal -> long number
+	complex number-> 4+8i
+names -> string
+major? -> yes or no  -- known as boolean
+when somebody ask ur skills -> devops aws docker kubernetes -> list of skills
+skills -> map or called as dictionary in python
+-- key -> value	
+      devops: 4 
+      docker: 3
+      kubernetes: 2
+
+by not handling data in proper way -- mistakes will happens
+
+real time example	
+areane4 -> speed round up -> 8.2km/sec -> 8km/sec
+copied code to arena5
+arean5 -> accurate speed (no speed round up) -> defined as integar ->8.2 km/sec
+integar can't hold ponits
+programming not able to handle this.. so its direction changed .. then automation system blasted arena5
+
+in shell scripting we have only two types of data types --
+1)number
+2)string
+
+everything is string in shell
+there is no need to mention datatype before variable in shell scripting
+
+
+08-data-types.sh
+-----------------
+#!/bin/bash
+
+NUM1=100
+NUM2=sivakumar #try with 200
+
+SUM=$(($NUM1+$NUM2))
+
+echo "Sum is: $SUM"
+
+command to execute script -- sh 08-data-types.sh
+
+output
+-------
+300 or 100
+here string is treated as 0
+
+# Array 
+=======
+-- list of strings
+
+FRUITS=("Apple" "Banana" "Pomo")
+
+echo "Fruits are: ${FRUITS[@]}"  #prints everything
+echo "First Fruit is: ${FRUITS[0]}"  #prints first fruit
+echo "Second Fruit is: ${FRUITS[1]}"
+echo "Third Fruit is: ${FRUITS[2]}"
+
+position/index in coding starts from 0
+size of fruits array -- 3
+max index - 2 (size -1)
+
+output 
+------
+Fruits are: Apple Banana Pomo
+First Fruit is: Apple
+Second Fruit is: Banana
+Third Fruit is: Pomo
+
+
+
+conditions
+==========
+keyword -- if or when
+
+syntax
+-------
+
+if [ expression ]; then
+	code here
+fi
+
+if [ expression ]; then
+	code here
+elif [ expression ]; then
+	code here
+else
+	code here
+fi
+
+
+09-conditions.sh
+----------------
+#!/bin/bash
+
+NUMBER=$1  #we have to check whether the given number is greater than 20
+
+# -gt -> greater than
+# -lt -> less than
+# -eq -> equal
+# -ne -> not equal
+if [ $NUMBER -gt 20 ]; then
+    echo "Given number: $NUMBER is greater than 20" #if above expression true this will be executed and exits from loop
+elif [ $NUMBER -eq 20 ]; then
+    echo "Given number: $NUMBER is equal to 20"  #if above expression false this will be executed and exits from loop
+else
+    echo "Given number: $NUMBER is less than 20"  #if above both are false this will be executed and exits from loop
+fi
+
+command to execute script -- sh 09-conditions.sh 100
+
+output
+-------
+100 is greater than 20
+
+check with different numbers to verify functionality
+
+when u execute a command 
+dnf install nginx -y
+it throws error like Please run this script with root user access -- this is an error
+we know that but system does not know this
+program always checks exit code
+command to know exit status of previous command -- $?
+EXIT codes
+==========
+0-127
+
+0 -> success
+anything else -> failure
+
+while installing any software we should first check whether the current user is root or not
+if root user then success
+otherwise failure
+
+command to know user id -- id or id -u
+root user id -> 0
+other users -> greater than 0
+
+
+10-installation.sh
+------------------
+USERID=$(id -u)
+
+if [ $USERID -ne 0 ]; then
+    echo "Please run this script with root user access"
+    exit 1
+fi
+
+echo "Installing Nginx"
+dnf install nginx -y # shell script knows this commads's output by exit status
+
+if [ $? -ne 0 ]; then
+    echo "Installing Nginx ... FAILURE"
+    exit 1 #shell script exits by this otherwise it does not exits
+else
+    echo "Installing Nginx ... SUCCESS"
+fi
+
+command to execute -- 10-installation.sh
+
+output
+------
+Please run this script with root user access
+
+
+if u run this with root user
+output
+------
+Installing Nginx
+Installing Nginx ... SUCCESS
+
+everytime we have to check what happens with previous command then we have to decide
+
+

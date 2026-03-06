@@ -1,0 +1,211 @@
+A 	 -> IPv4
+AAAA -> IPv6
+MX 	 -> Mail
+NS	 -> Domain authority
+CNAME -> Point to another domain
+TXT  -> verification
+
+1XX -> informational
+2XX -> Success
+3XX -> Redirectional
+4XX -> Client error
+5XX -> Server error
+
+see mongodb documentation in roboshop folder
+
+NoSQL
+=======
+data is un sctructured
+useful when huge amounts of data
+data is stored as documents
+generally used for product catalouges, Real-time analytics, etc but not for transactions
+
+Redis
+=======
+in-memory(RAM) database
+HD contains data -> places in RAM -> Processor
+for every application along with HD we should allocate sufficient RAM also
+redis is a key-value pair  database
+apps checks -> cache -> if not available in cache -> database
+
+Asynchronous 
+===========
+ActiveMQ, IBM MQ, RabbitMQ, Kafka, etc...
+
+synchronous -> request and wait -> http
+asynchronous -> fire and forget  -> mail, whatsapp, etc..
+
+Prodcuer -> Who is sending message
+Consumer -> Who is consuming message
+
+in asynchronous
+No waiting, good user experience
+Scalability
+Reliability
+Loose Coupling -> gives request to other system -> doesn't waits for response
+Tight Coupling -> complete dependency -> with other system -> waits for response -> performance slows down 
+tight coupling with the same system is okay
+
+when there is urgency use synchronous otherwise use asynchronous
+
+Queue management -> FIFO (first in first out) -> one to one
+queue is known as message broker
+Ramesh sends message to suresh, but suresh is offline so message stays in queue whenever suresh comes online, his apps checks at queue for his messages
+
+publish & subscribe
+Pub/Sub -> 1 to many
+Publisher -> Who is sending message (i.e topic)
+Subscribers -> Who is following -> will listen to the topic 
+
+4 kinds of databases -- sql, NoSQL, cache, queue
+
+when data in frontend or backend loses we can recover but data in db is lost we can't recover so its very important 
+
+1) firstly we setup mongodb -- 
+
+service quotas -- aws services -- ec2 -- Running on-demand standard(A,C,D,H,I,M,R,T,Z) instances -- default 5 -- increase quota value -- 20 - request
+increase servicequota before practice because it takes sometime (request 20)
+
+we can't install mongodb directly from internet
+add mongodb repo in /etc/yum.repos.d/
+and then enable it and start it
+mongodb open 27017 port
+
+ps -ef | grep mongo
+netstat -lntp
+
+Generally databases by default not accept connections from remote servers (accepts connections from only localhost i.e 127.0.0.1)
+open /etc/mongod.conf -- bind 0.0.0.0  -- save -- restart
+now it accepts connections from all remote servers
+mongod -- mongo daemon
+
+2) setup catalogue --
+
+previous days -> in backend -> combining all components in single module called as monolithic
+
+here consider each component in backend as monolithic
+
+component == module == application
+node == box == server
+
+disable default version and enable required version and install it 
+create roboshop user as system user with /app as home directory with nologin
+useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop
+
+create /app directory now
+
+download catalogue application -- move to /app directory -- by reading package.json -- installs dependancies using npm install 
+
+create catalogue.service file -- configure mongodb url in that -- give dns -- mongodb.sowjanya.fine
+
+create A record -- in route 53 -- with private ip of mongodb
+
+nslookup mongodb.sowjanya.fine
+
+ps -ef | grep node -- roboshop -- /bin/node /app/server.js
+
+curl http://localhost:8080/health -- health check
+
+telnet mongodb.sowjanya.fine 27017
+u should connect
+
+we should load data of products
+
+we should install client package in catalogue by adding repo of mongodb 
+
+mongodb server -- mongodb-org
+client -- mongodb-mongosh
+mongosh --host MONGODB-SERVER-IPADDRESS </app/db/master-data.js
+/app/db/master-data.js -- contains json data of products
+
+to connect to mongodb -- mongosh --host MONGODB-SERVER-IPADDRESS or mongodb.sowjanya.fine
+
+test> show dbs
+
+test > use catalogue
+
+catalogue > show collections
+
+catalogue > db.products.find() -- shows data of products in json format
+
+exit
+
+to check the logs we can use /var/log/messages or journalctl -u catalogue
+ 
+in that u can see mongodb connected
+
+3)now we configure frontend i.e nginx
+
+install nginx -- 
+
+dnf module list nginx -- to check all versions of nginx
+
+now disable all -- enable nginx 1.24 and install it -- start it -- remove default content -- download our content -- unzip code in /usr/share/nginx/html
+
+now we are directly editing nginx.conf only
+
+create r53 record for catalogue
+in catalogue location -- catalogue.sowjanya.fine
+
+restart nginx
+
+create r53 record for nginx server -- give public ip
+open browser -- http://sowjanya.fine -- we can see the products data in categories
+inspect -- network -- refresh -- click on categories -- http://sowjanya.fine/api/catalogue/categories -- response -- artificial intelligence , robot
+click on one product in artificial intelligence and then ispect again
+
+/api/catalogue -> forward those requests to catalogue component -- this is fixed by frontend developers
+nginx logs -- /var/log/nginx
+
+4) configuration of redis 
+disabling all current versions and enabling only redis7
+and install redis 7
+open /etc/redis/redis.conf -- bind 0.0.0.0 and protected mode change it from  yes to no
+then enable redis and start redis
+redis opens 6379 port
+check it by netstat -lntp
+
+5) user configuration
+it is also developed by using nodejs
+enable nodejs:20 and install it
+create system user with name roboshop
+download code and unzip it in /app folder
+install npm dependancies
+create a records for mongodb and redis and user and cart
+create service file and give dns names of mongodb and redis in that
+user depends upon mongodb and redis
+reload the daemon and enable and start the user
+
+6) let's configure cart
+enable nodejs: 20 and install nodejs
+create systemm userwith name roboshop
+create /app directory
+download the code and unzip it in /app
+cart depends on redis and catalogue
+add dns names of them in conf file 
+then enable cart and start cart
+
+health check command for nodejs instances -- curl http://localhost:8080/health
+
+now goto front end server -- nginx.conf file change location of user & cart nad restart nginx
+
+open browser -- login -- register -- with ur name & mail id 
+as a devops engineer we should provide best infra for application and good release
+now u can browse products and add product to cart
+increase servicequota before practice because it takes sometime (request 20)
+
+
+[Unit]
+Description = Cart Service
+[Service]
+User=roboshop
+// highlight-start
+Environment=REDIS_HOST=redis.daws88s.online
+Environment=CATALOGUE_HOST=catalogue.daws88s.online
+Environment=CATALOGUE_PORT=8080
+// highlight-end
+ExecStart=/bin/node /app/server.js
+SyslogIdentifier=cart
+
+[Install]
+WantedBy=multi-user.target

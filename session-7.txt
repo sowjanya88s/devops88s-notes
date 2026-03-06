@@ -1,0 +1,195 @@
+devops-practice
+ami-09c813fb71547fc4f
+RHEL-9-DevOps-Practice
+ec2-user DevOps321
+
+RDBMS -> relational database management server
+MySQL  , oracle, PostgreSQL, mssql comes under RDBMS
+the data will be in tables in these RDBMS databases
+there will be relations between tables by using primary key and foreign key
+if we place all data in one table while querying it will be difficult(maintainence issue)
+for example 
+user table
+id name mobilenumber 
+id -- primary key
+payments
+userid id amount date
+userid -- primary key
+id -- foreign key
+
+install mysql & we need to setup password(ExpenseApp@1) for root of MySQL server
+	server -- mysql-server
+	client -- MySQL
+to connect to server we need a client package
+
+Usually command to connect mysql server is
+mysql -h <host-address> -u root -p<password>
+
+or u can simply give -- mysql because wr r in mysql-server only
+
+But if your client and server both are in a single server, you can simply issue.
+mysql
+
+when u install mysql-server , mysql will be installed automatically
+
+by placing all data in one table maintainence will become difficult. so we divide the data into multiple tables and relationship between them will be maintained by using primary key & foreign key
+
+backend programming language will be decided by architects based on availability
+for example they have selected nodejs as backend programming language. and they will tell the version also
+
+login to backend sever using public ip
+
+install nodejs
+
+dnf module list nodejs -- lists multiple versions of nodejs by searching all repos
+
+we don't know what is the default version so use disable command to disable the default version
+
+dnf module disable nodejs -y
+
+dnf module enable nodejs:20 -y
+
+dnf install nodejs -y
+
+by this nodejs 20 will be installed because we enabled it
+
+by installing nodejs its dependancy packages will be updated
+
+after nodejs installation try to login to the same server again it will throw an error
+reason is  ssh depends on openssl (updated while installing nodejs)and openssh
+
+sshd -t
+openssl version mismatch
+
+so we need to update openssh to avoid ssh break
+
+dnf update -y openssh openssh-server openssh-clients
+
+now create system user 
+human accounts -- username and password
+non human accounts -- username exists without password
+by ruuning the application with the help of human account there is a chance of password leak by that hacking may happen
+
+by running the application by using non human account there are no such chances 
+for this options like iam roles in aws & service accounts in k8s
+we call support users in projects
+
+now create a folder to place the nodejs code  and download the application code by using curl command (link provided by developers)
+curl -o -- to download the code
+/tmp --- os stores temp files here
+unzip the code in /app
+
+nodejs extension always --- .js 
+libraries == dependancies
+common things are created as libraries by developers
+
+libraries in nodejs
+package.json -- this is called build file where developers mention dependancies and application details
+
+cat package.json
+in output we can see under which version application runs , application name & description and license and dependancies of application
+every programming language contains one build file
+we should know build file and extension for every programming language
+
+npm install -- reads package.json and download dependancies from internet (around 86 packages)
+we can find all those packages under node_modules (u can see in /app folder) after installing npm
+
+
+nodejs --- file extension -- .json
+nodejs ---build tool -- npm (node package manager) -- buildfile name -- package.json 
+to run build file we need build tool. so we need to install build tool
+
+java -- file extension --- .java
+build tools --- maven -- build file name --  pom.xml
+
+python --- file extension -- .py
+build tools ---  pip -- build file name -- requirements.txt
+
+
+.net -- file extension -- .aspx
+build tools -- nuget --  build file name -- *.csproj
+
+now we have to run the application
+the application is completely customized
+
+systemctl -- more flexible to start/stop/enable/restart/status
+when u give this systemctl it checks  .service files  -- will be in /etc/systemd/system -- when linux server starts it checks *.service existence and if exists it will be started
+
+to start the application we need to run index.json
+
+to start that we have to write a service file in /etc/systemd/system
+
+here in conf file of backup we mention
+[Unit]
+Description = Backend Service
+
+[Service]
+User=expense
+Environment=DB_HOST="<MYSQL-SERVER-IPADDRESS>"
+ExecStart=/bin/node /app/index.js
+SyslogIdentifier=backend
+
+[Install]
+WantedBy=multi-user.target
+
+loading path of nodejs --- command -- which node --- /bin/node or /usr/bin/node
+u can place the output of which node in exec start
+index.js starts the nodejs application and that is in /app folder
+
+in that we will mention db-private-ip (to connect with db application need db ip address and (username & pwd will be mentioned in code done by developers)) and index.json file location
+here all three servers (frontend ,backend , db servers) are in same network , by using private ip here application server can connect to db server fastly
+
+port(3306 by default) and username & password will be mentioned in dbconfig.js that is done by developers
+
+if u create a server in aws it will be at another location and u r in another location so u have to use public ip to connect to server using gitbash or putty
+
+if u r in the same network of ur server u can use private ip -- to avoid latency and to improve security
+
+if u made any changes in any files u have to execute daemon-reload command
+
+u have to load the data into database before starting the application
+
+database related commands are provided in backend.sql and that is in /app/schema
+
+open backend.sql file , in that u can find commands to create database , commands to create table, creation of user on that table and providing full access to that user on that table
+
+in application server we have to install MySQL client then only it can connect to MySQL server
+
+dnf install MySQL -y -- MySQL client installation
+
+run the script from application server for creation of database
+
+now goto database server -- connect to MySQL
+
+check whether the table is created or not
+
+MySQL
+
+mysql> show databases;
+use transactions;
+show tables;
+
+now goto application server and start backend service and check whether it is started or not
+
+backend applications mostly opens 8080 port
+
+netstat -lntp -- 8080 opened by node -- u can see
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+in Linux server if we install database software it will become database server

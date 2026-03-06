@@ -1,0 +1,206 @@
+ami name and id has changed --- id --ami-0220d79f3f480ecf5 , name --redhat-9-devops-practice  
+
+code and configuration
+here configuration means database details , which is very important
+
+without loading database schema application doesn't starts
+
+we should enable the services after creation otherwise after server restart they don't run automatically
+
+/var/log -> logs location
+
+loading database schema
+mysql -h 172.31.23.126 -uroot -pExpenseApp@1 < /app/schema/backend.sql
+
+command to check backend is able to connect database
+telnet 172.31.23.126 3306
+
+to make any programming language run u should follow below steps--
+1. Installing programming runtime
+2. Create a directory and system user
+3. Download and unzip the code
+4. Install dependencies
+5. Create systemctl service
+6. Run DB scripts if required
+7. Start the application
+
+now we see frontend
+Nginx
+======
+popular http web server, reverse proxy
+Apache
+HTML, CSS and JS code runs by -> Web server
+
+configs -> /etc/nginx
+HTML -> /usr/share/nginx/html
+logs -> /var/log/nginx
+default page -> /usr/share/nginx/html/index.html
+
+after installation open browser http://<public-ip>:80 -- u can see default page
+we don't need default page so remove all content
+
+rm -rf /usr/share/nginx/html/*
+
+download front end code and unzip it in /usr/share/nginx/html
+
+now we need to create conf file
+
+in conf file we have mention the details of application server by that frontend can connect to backend server
+
+Proxy -> on behalf of someone
+
+2 types of proxy
+
+Forward Proxy and Reverse Proxy
+
+Client and Server
+
+Mobile(Client) -> Netflix(Server)
+
+Forward Proxy
+==============
+1. hiding client identity (ex: vpn)
+2. forward proxy sits in between client and server
+3. client aware that they r using forward proxy
+4. VPN, content filtering, traffic monitoring
+5. Can be used as caching also.
+
+content filtering -- in companies they will restrict ur access of sites at vpn level and vpn logs tour browsing history
+ 
+
+Reverse Proxy
+=============
+1. Hiding server identity (users thinks that respone is coming from frontend but response actually comes from backend or application server)
+2. Server Aware
+3. for Security reasons and queue management they use reverse proxy
+4. Load balancing is queue management
+5. used for SSL/TLS/HTTPS termination
+
+https -- encrypts the data for security reasons
+once request to our env (server) https is not needed
+by https also fetching data becomes slow
+we implement https at entry point of our env(i.e front end ) -- this is called ssl/tls/https termination
+frontend to backend , backend to db -- here we don't use https
+to fastly fetch the data from application server or db server we ignore https , app server and db server are in our environment and they will be in reverse proxy
+
+frontend to backend communication conf: /etc/nginx/nginx.conf
+at the time of installation one user will be created with name nginx , it runs nginx
+in conf we can see access logs & error logs location and default code location (we can change root directory of code here if we need)
+
+include /etc/nginx/conf.d/*.conf;
+include /etc/nginx/default.d/*.conf;(loads all conf files)
+
+/etc/sudoers.d/  -- create file with the name of group --to provide permissions to a new group we have created separate file and mentioned there. done to manage separately
+
+by using nginx we can handle multiple backends
+
+API -> Application programming Interface
+
+if someone hits /api -- that request will be forwarded to backend ip address(http://172.31.28.10:8080)
+
+this conf will be maintained in default.d without disturbing nginx.conf
+we can also mention it in nginx.conf
+
+proxy_http_version 1.1;
+
+location /api/ { proxy_pass http://172.31.28.10:8080/; }
+
+location /health {
+  stub_status on;
+  access_log off;
+}
+
+gov  provides API by that below sites access API and fetches the results
+eenadu, tv9, manabadi, sakshi, etc.
+
+input -> Hall Ticket No , DOB
+
+emacet API -> eamcet DB
+
+https://eamcet.ap.gov.in/api/results
+Request Format:
+
+{
+	"hallTicketNo": 123456789,
+	"dob": "01-01-1999"
+}
+
+Response Format:
+{
+	"name": "sivakumar",
+	"result": "pass",
+	"marks": 99.99
+}
+
+eenadu frontend -> emacet API -> eamcet DB
+
+enter hall ticket, dob
+API url -> https://eamcet.ap.gov.in/api/results
+
+after that restart nginx
+
+open browser -- http://<public ip of frontend server>
+home -- expense -- amount - 200 -- description -- add
+after clicking add -- right click -- inspect -- we can se html code -- network -- 
+
+http://3.85.111.189 -- loads /usr/share/nginx/html -- goes to -- /static/media --loads the image there -- i.e http://3.85.111.189/static/media/3TierArch.0486e7150e53d305d1c2.png
+
+here everything is a request
+
+home -- expense -- amount - 220 -- description -- add -- request goes to backend with data
+
+http://3.85.111.189/api/transaction  (right click -- inspect --u can see this network tab -- headers) -- request goes to backend with data
+
+{
+	amount: "200",
+	desc: "travel"
+}
+backend stores above data in database (right click -- inspect --in network tab -- response -- u can see these details)
+
+goto db -- connect to db and fetch data -- there u can see this entry of 200 in transactions table
+
+HTTP Methods
+============
+CRUD -- create read update delete
+get post put delete  -- operations
+
+
+
+getTransactions -- read
+
+http://3.85.111.189/api/transaction
+GET -> Verb
+transaction -> noun
+
+http://3.85.111.189/api/transaction
+POST -> Creating Data
+
+http://3.85.111.189/api/transaction
+PUT -> UPDATE
+
+{
+	amount: "2000",
+	desc: "travel"
+}
+
+http://3.85.111.189/api/transaction
+DELETE
+
+Domain
+DNS -> Domain name system
+
+upto now we have given ip addresses. ip address changes when we restart servers or when server crashes , we have to create new servers which is time consumingin this case server public ip address changes
+after that we have change ip address -- in both cases updation of ip requires atleast 10 mins -- in projects 10mins downtime of website becomes huge loss
+
+humans ->reference --> names
+computers -> reference --> numbers
+
+DNS will be mapped to ip this will be managed by ICANN
+
+facebook.com == 33.45.78.212
+
+ICANN -> Internet corporation for assigned names and numbers
+Non profit organisation -- managed by multiple companies and organizations
+
+
+

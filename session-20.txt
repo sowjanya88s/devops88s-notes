@@ -1,0 +1,279 @@
+lets see about crontab
+connecting to server and deleting log files older than 14 days everyday will become difficult
+
+Crontab
+========
+crontab is a scheduler in linux server, we can schedule the scripts to run periodically
+
+command -- crontab -e -- editing
+
+goto crontab guru  -- u can check some examples here
+***** -- min hour day month weekday -- runs every minute
+02*** -- every day at 2 am
+00**1-5 -- runs every weekday at 12 am
+
+crontab -e
+***** echo "hello world"
+logs of crontab will be saved in /var/log/cron
+tail -f /var/log/cron
+there we can see echo statement output for every one minute
+we will use these crontabs everywhere to avoid manual tasks what we perform repeatedly
+
+mkdir app-logs
+cd app-logs/
+touch -d 20260101 mongodb.log
+touch -d 20260101 redis.log
+
+crontab -e
+***** /home/ec2-user/shell-script/delete-old-log-files.sh
+goto crontab log files and check the log -- u can see files older than 14 days will be deleted -- this runs on every minute
+
+now we see how to run a shell script like a shell command
+
+steps:
+command to copy a directory -- cp source_dir dest_dir
+
+we want to execute the script as a command like this --
+backup source_dir dest_dir 20
+
+1. user should pass source_dir dest_dir, default is 14 days, but user can override
+2. verify the directories exist and root user too
+3. find the files
+4. archive them and place into dest_dir
+5. check archive is success or not
+6. if success you can delete from source_dir
+
+generally backup and storage teams, when we places files in destination directory they will move those files into another file server 
+when storage files becomes large they will archive those files and move them to a different server
+according to regulations atleast they should maintain atleast 6 months logs they are required if any issue comes suddenly
+
+create log file which stores the log of the current script
+give the path of log directory in LOGS_FOLDER
+
+write usage function to tell the user how to execute the script -- if he supplies no arguments 
+for this script we need to pass atleast 2 arguments -- source_directory , destination directory -- if user doesnot provided two arguments -- call usage function
+
+3rd argument is optional -- i.e how many days older files we need to check in source directory -- if user provides that value script takes it otherwise default value is 14
+validate if source directory and destination directory exists or not
+take source directory as $1
+take destination directory as $2
+DAYS=${3:-14} -- # 14 days is the default value, if the user not supplied -- it takes that value
+providing absolute path is better while providing paths
+next use find command to find files older than 14 days
+parameterize the days variable
+after finding we should archive those files and send them to dest dir and then delete those files in source dir
+archived files will be saved as app-log-timestamp.tar.gz
+after archiving we should check archieval of file is success or not
+
+to execute the above script as command
+every command we give in linux server it will run from --- anyone of below paths --  echo $PATH
+/home/ec2-user/.local/bin:/home/ec2-user/bin:/usr/bin:/usr/local/sbin:/usr/bin
+now we have place this script in anyone of above paths to run it as command
+
+now place the script in /usr/bin
+sudo cp backup.sh /usr/bin/backup
+
+give execution permissions to that file
+chmod +x /usr/bin/backup
+
+now u can execute the script with below command
+sudo backup /home/ec2-user/app-logs /home/ec2-user/dest-dir
+
+now we can place this script in crontab also
+crontab -e
+* * * * *  sudo backup /home/ec2-user/app-logs /home/ec2-user/dest-dir
+check logs in /var/log/cron
+ 
+if we place this script in AMI -- we can execute this script in all servers
+
+
+backup.sh
+=========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-script"
+LOGS_FILE="/var/log/shell-script/backup.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SOURCE_DIR=$1
+DEST_DIR=$2
+DAYS=${3:-14} # 14 days is the default value, if the user not supplied
+
+log(){
+    echo -e "$(date "+%Y-%m-%d %H:%M:%S") | $1" | tee -a $LOGS_FILE
+#prints timestamp& argument passed to it -- on screen & log file
+}
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N"
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+USAGE(){
+    log "$R USAGE:: sudo backup <SOURCE_DIR> <DEST_DIR> <DAYS>[default 14 days] $N"
+    exit 1
+}
+
+
+if [ $# -lt 2 ]; then
+    USAGE
+fi
+
+if [ ! -d "$SOURCE_DIR" ]; then
+    log "$R Source Directory: $SOURCE_DIR does not exist $N"
+    exit 1
+fi
+
+if [ ! -d "$DEST_DIR" ]; then
+    log "$R Destination Directory:  $DEST_DIR does not exist $N"
+    exit 1
+fi
+
+### Find the files
+FILES=$(find "$SOURCE_DIR" -name "*.log" -type f -mtime +$DAYS)
+
+log "Backup started"
+log "Source Directory: $SOURCE_DIR"
+log "Destination Directory: $DEST_DIR"
+log "Days: $DAYS"
+
+if [ -z "${FILES}" ]; then
+    log "No files to archive ... $Y Skipping $N"
+else
+    # app-logs-$timestamp.zip
+    log "Files found to archive: $FILES"
+    TIMESTAMP=$(date +%F-%H-%M-%S)
+    ZIP_FILE_NAME="$DEST_DIR/app-logs-$TIMESTAMP.tar.gz"
+    log "Archive name: $ZIP_FILE_NAME"
+    tar -zcvf $ZIP_FILE_NAME $(find $SOURCE_DIR -name "*.log" -type f -mtime +$DAYS)
+
+    # Check archieve is success or not
+    if [ -f $ZIP_FILE_NAME ]; then
+        log "Archeival is ... $G SUCCESS $N"
+
+        while IFS= read -r filepath; do
+        # Process each line here
+        log "Deleting file: $filepath"
+        rm -f $filepath
+        log "Deleted file: $filepath"
+        done <<< $FILES
+    else
+        log "Archeival is ... $R FAILURE $N"
+        exit 1
+    fi
+fi
+
+command to execute -- sh backup.sh /home/ec2-user/app-logs /home/ec2-user/dest-dir
+
+by monitoring server resources and send email
+in compaines they configure this with their company mail ids
+but now we use gmail
+
+check documentation -- concepts -- send-gmail.MD
+connect to ur server -- 
+dnf install msmtp -y
+for scripts gmail provides app & passwords
+open gmail -- security & sign in -- enable 2factor authentication
+google account -- and create app & password for it
+follow the same process for 2 mails -- one is for sending mail & other is for receiving
+ 
+app-password 
+opswuoalzivjwfwf
+
+open conf file 
+vi /etc/msmtprc -- write below content replace mails & app passwords (don't change gamil server's url and password)
+
+
+defaults
+auth           on
+tls            on
+tls_trust_file /etc/ssl/certs/ca-bundle.crt
+logfile        /var/log/msmtp.log
+
+account        gmail
+host           smtp.gmail.com
+port           587
+from           m.sivakmrreddy@gmail.com
+user           m.sivakmrreddy@gmail.com
+password       udvxeilgkoufsbbt
+
+account default : gmail
+
+give permissions & log files
+chmod 644  /etc/msmtpc
+touch /var/log/msmtp.log
+chmod 666 /var/log/msmtp.log
+
+
+use below command to check mail is receiving or not
+
+{
+echo "To: info@joindevops.com"
+echo "Subject: Shell script test"
+echo "Content-Type: text/html"
+echo ""
+echo "test from shell"
+} | msmtp "info@joindevops.com"
+
+disk utilsation, trigger email if du is more than 70
+
+after this u will receive mail -- test from shell
+
+now we have to check disk utilization , trigger email if du is more than 70
+
+command to check disk uitilization -- df -Th
+in that output we don't need the first line
+we need only disk utilization and it is in 6th column & disk mount points and it is in 7th column
+below command shows all rows except Filesystem row
+df -hT | grep -v Filesystem
+
+command to print 6th column
+echo $line | awk '{print $6}' 
+to remove %
+(echo $line | awk '{print $6}' | cut -d "%" -f1)
+
+command to print 7th column
+echo $line | awk '{print $7}'
+we don't need root access to run this script
+we didn't used 70% here so to receive mail set threshold of 3%
+
+to avoid overriding of previous message use + there
+\n -- to print output in new line
+if we use \n we have to give -e in echo command
+
+
+disk-usage.sh
+=============
+#!/bin/bash
+
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+MESSAGE=""
+
+
+log(){
+    echo -e "$(date "+%Y-%m-%d %H:%M:%S") | $1"
+}
+
+DISK_USAGE=$(df -hT | grep -v Filesystem)
+USAGE_THRESHOLD=3
+
+while IFS= read -r line
+do
+    USAGE=$(echo $line | awk '{print $6}' | cut -d "%" -f1)
+    PARTITION=$(echo $line | awk '{print $7}')
+
+    if [ "$USAGE" -ge "$USAGE_THRESHOLD" ]; then
+        MESSAGE+="High Disk usage on $PARTITION: $USAGE% \n"
+    fi
+done <<< $DISK_USAGE
+log "$message"
+
+now we have to send this disk utilization alert to mail.. we will do it tomorrow

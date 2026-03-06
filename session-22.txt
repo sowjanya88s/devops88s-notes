@@ -1,0 +1,425 @@
+ansible implemented pull based architecture later we will see that during terraform
+create on repo -- ansible
+while registering into school , we see how to give student info
+create one file -- students.xml
+
+students.xml
+============
+<!-- Student list -->
+<Students>
+<!-- Student Object -->
+
+   <student>
+        <FirstName>Ramesh</FirstName>
+        <DOB>1999-01-01</DOB>
+        <Email>info@joindevops.com</Email>
+        <!-- Adress field -->
+  <!-- <Address>104 gandhi apartments hyderabad</Address> -->
+ <!-- Address object -->
+        <!-- <Address>
+            <FlatNumber>104</FlatNumber>
+            <Street>Gandhi Nagar</Street>
+            <City>Hyderabad</City>
+        </Address> -->
+        <Addresses>
+            <PermAddress>
+                <FlatNumber>104</FlatNumber>
+                <Street>Gandhi Nagar</Street>
+                <City>Hyderabad</City>
+            </PermAddress>
+            <CurrentAddress>
+                <FlatNumber>104</FlatNumber>
+                <Street>Gandhi Nagar</Street>
+                <City>Hyderabad</City>
+            </CurrentAddress>
+        </Addresses>
+    </student>
+
+    <student>
+        <FirstName>Suresh</FirstName>
+        <DOB>1999-01-01</DOB>
+        <Email>info@joindevops.com</Email>
+        <!-- <Address>104 gandhi apartments hyderabad</Address> -->
+        <!-- <Address>
+            <FlatNumber>104</FlatNumber>
+            <Street>Gandhi Nagar</Street>
+            <City>Hyderabad</City>
+        </Address> -->
+        <Addresses>
+            <PermAddress>
+                <FlatNumber>104</FlatNumber>
+                <Street>Gandhi Nagar</Street>
+                <City>Hyderabad</City>
+            </PermAddress>
+            <CurrentAddress>
+                <FlatNumber>104</FlatNumber>
+                <Street>Gandhi Nagar</Street>
+                <City>Hyderabad</City>
+            </CurrentAddress>
+        </Addresses>
+    </student>
+</Students>
+
+writing the same info in json (java script object notation) -- json is used in api's
+
+students.json  -- here object starts in {} , list starts in []
+=============
+{
+    "students": [ //list of students
+        { //student 1 info
+            "firstName": "Sivakumar Reddy",
+            "dob": "1991-01-01",
+        
+            "addresses": [  //list of objects
+                {
+                    "type": "perm",
+                    "flatNumber": 104,
+                    "street": "gandhi nagar",
+                    "city": "hyderabad"
+                },
+                {
+                    "type" : "current",
+                    "flatNumber": 104,
+                    "street": "gandhi nagar",
+                    "city": "hyderabad"
+                }
+            ],
+            "skills": ["java", "devops", "cloud"] //list ofstrings
+        },
+        { //student 2 info
+            "firstName": "Sivakumar Reddy",
+            "dob": "1991-01-01",
+        
+            "addresses": [ 
+                {
+                    "type": "perm",
+                    "flatNumber": 104,
+                    "street": "gandhi nagar",
+                    "city": "hyderabad"
+                },
+                {
+                    "type" : "current",
+                    "flatNumber": 104,
+                    "street": "gandhi nagar",
+                    "city": "hyderabad"
+                }
+            ],
+            "skills": ["java", "devops", "cloud"]
+        }
+    ]
+}
+
+json does not have comments so be careful while pasting above 
+
+lets see yaml file -- extension -- .yaml
+in yaml we should follow indentation
+file starts with -
+yaml file contains key value pair
+while giving value give one space
+students.yaml
+=============
+- name: "Sivakumar Reddy" //if space is there use quotes 1stobject
+  dob: "1999-01-01"
+  mobileNumber: 1234567890
+  addresses: //list -- starts with -
+  - flatNumber: 104  //1st object
+    street: "gandhi nagar"
+    city: hyderabad
+    type: current
+  
+  - flatNumber: 104 //2nd object
+    street: "gandhi nagar"
+    city: hyderabad
+    type: perm
+
+- name: "Suresh" //2nd student object
+  dob: "1999-01-01"
+  mobileNumber: 1234567890
+  addresses:
+  - flatNumber: 104
+    street: "gandhi nagar"
+    city: hyderabad
+    type: current
+  
+  - flatNumber: 104
+    street: "gandhi nagar"
+    city: hyderabad
+    type: permanent
+
+now we see how to write playbooks in ansible
+
+01-playbook.yaml -- we are writing this against host
+================
+- name: ping the server
+  hosts: ansible
+  tasks:
+  - name: ping the web server
+    ansible.builtin.ping:
+
+one more important thing in ansible is inventory
+in this we can write what r the servers ansible can connect to
+
+create file -- inventory.ini
+group of servers can be written 
+
+inventory.ini
+=============
+192.168.98.48  //single ip can be written like this
+
+[frontend]
+10.160.4.1
+10.160.4.2
+10.160.4.3
+
+[backend]
+10.160.4.1
+10.160.4.2
+10.160.4.3
+
+[roboshop:children]  //group of groups
+frontend
+backend
+
+[local]
+localhost 	//targetting localhost
+
+how to convert already existing  folder i.e ansible into git folder
+
+goto GitHub -- create repo ansible
+
+open gitbash --
+cd d:
+cd devops-88s/ansible
+git init  //initializing folder this as git
+git branch -M main
+git remote add origin <http url of git repo>
+
+git add . ; git commit -m "new" ; git push origin main
+
+now content in ur local folder will be pushed to git repo
+
+now create two servers -- ansible & node
+connect to ansible server
+install ansible in it 
+dnf install ansible -y 
+git clone <ansible-repo>
+cd ansible
+ansible frontend -i inventory.ini --list-hosts
+ansible all -i inventory.ini --list-hosts
+ansible roboshop -i inventory.ini --list-hosts
+ansible ungrouped -i inventory.ini --list-hosts
+to see all info of inventory
+ansible-inventory -i inventory.ini --graph
+
+now we write a playbook
+01-playbook.yaml
+=================
+- name: ping the server   // name of playbook
+  hosts: ansible	//where u want to execute this playbook
+  tasks: 		//what tasks u want to perform
+  - name: ping the web server
+    ansible.builtin.ping:
+
+ansible.builtin.ping -- is the ansible module
+
+command to execute -- ansible-playbook -i inventory.ini -e ansible_user=ec2-user -e ansible_password=DevOps321 01-playbook.yaml
+
+in output we can see gathering facts -- here facts means variables -- before connecting to server ansible takes info of that server and uses it (i.e OS , distribution , ip address , network info etc)
+
+
+by using ansible modules -- we can connect to other systems by using API's
+ansible takes input from us and it hits API's that can be within the server or outside
+we give inputs in playbook , ansible runs inside python connects to systems using API
+to connect amazon using ansible we have to write commands in ansible playbook by that code runs and in background ansible hits amazon API 
+ansible handles yaml code very easily
+
+there will be community modules also
+seach -- ansible modules -- docs.ansible.com
+we can also create github repo by using ansible
+by using ansible we can do config mgmt (connecting to server and installing packages and configuring them)
+and by using ansible we can connect to other systems (thiis is not popular)
+
+to connect to other systems terraform is popular
+we discuss the reason for it at the end
+
+to print anything using ansible
+- name: Hello World
+  #hosts: web
+  hosts: local
+  connection: local
+  tasks:
+  - name: print hello World    //task-name
+    ansible.builtin.debug:    //module to print 
+      msg: "Hello World!"	//msg to print
+
+command to execute -- ansible-playbook -i inventory.ini -e ansible_user=ec2-user -e ansible_password=DevOps321 02-playbook.yaml
+
+output --
+msg: "Hello World!"
+
+installing a package using ansible
+03-playbook.yaml
+=================
+- name: install and run nginx
+  hosts: web
+  become: yes	//running as root user
+  tasks:
+  - name: install nginx
+    ansible.builtin.package:   //installs nginx by using package module
+      name: nginx
+      state: present
+
+  - name: start nginx
+    ansible.builtin.service:	//starting nginx using service module
+      name: nginx
+      state: started
+      enabled: yes 	//enables and starts the service at a time
+
+command to execute -- ansible-playbook -i inventory.ini -e ansible_user=ec2-user -e ansible_password=DevOps321 03-playbook.yaml
+
+while gathering facts -- it understands the os -- and runs os related command to install nginx
+that is how ansible acts as heterogeneous 
+
+state: restarted    -- means restarting service
+state: enabled    -- means enabling service
+state: stopped    -- means restarting service
+
+playbook is a list of tasks that can be executed against any server as part of configuration management
+
+defining variables in ansible
+
+if we give hosts  & connection as local there is no need to provide username and password also
+in below program variable are defined at play level so they are called play level variables
+
+04-vars.yaml
+============
+- name: play level variables
+  hosts: local
+  connection: local
+  vars:
+    COURSE: "DevOps with AWS"
+    DURATION: "140HRS"
+    TRAINER: "Sivakumar Reddy"
+  tasks:
+  - name: print variables
+    ansible.builtin.debug:
+      msg: "Course is: {{ COURSE }}, Trainer is: {{ TRAINER }}"  //to print variable {{ <var-name> }}
+
+comand to execute -- ansible-playbook -i inventory.ini 04-vars.yaml
+
+output --
+msg: "Course is: DevOps with AWS , Trainer is: Sivakumar Reddy "
+
+now we will see task level variables , we can mention them in task
+if a variable is defined at play level and task level -- which value will be printed
+this is called as overriding
+if we does not override what we mentioned at play level that will be printed
+
+variables defined at play level -- will be assigned to all taks -- called inheritance
+
+05-vars.yaml
+============
+- name: task level variables
+  hosts: local
+  connection: local
+  vars:
+    COURSE: "DevOps with AWS"
+    DURATION: "140HRS"
+    TRAINER: "Sivakumar Reddy"
+  tasks:
+  - name: print variables
+    vars:
+      COURSE: Ansible
+    ansible.builtin.debug:
+      msg: "Course is: {{ COURSE }}, Trainer is: {{ TRAINER }}"
+
+comand to execute -- ansible-playbook -i inventory.ini 05-vars.yaml
+
+output -- 
+msg: "Course is: DevOps with AWS ,  Trainer is: Sivakumar Reddy "
+
+without disturbing the main file we can mention variables at another place and we can use them in playbook
+
+course.yaml
+===========
+COURSE: "DevOps with AWS"
+DURATION: "140HRS"
+TRAINER: "Sivakumar Reddy"
+
+06-course.yaml
+==============
+- name: file variables
+  hosts: local
+  connection: local
+  vars_files:		//we can pass var-files by this
+  - course.yaml    // passing variable file name here
+  tasks:
+  - name: print variables
+    vars:
+      COURSE: Ansible
+    ansible.builtin.debug:
+      msg: "Course is: {{ COURSE }}, Trainer is: {{ TRAINER }}"
+
+
+comand to execute -- ansible-playbook -i inventory.ini 06-course.yaml
+
+output
+ msg: "Course is: DevOps with AWS , Trainer is: Sivakumar Reddy 
+
+if u want to change the variable values goto course.yaml -- change them
+
+we can take info from user also 
+07-vars.yaml
+============
+- name: print username and password
+  hosts: local
+  connection: local
+  vars_prompt:  // to prompt list of variables
+  - name: username
+    prompt: Please enter your username 	//prompt text
+    private: false 	//not confidential
+
+  - name: password
+    prompt: please enter your password
+    private: true	//confidential -- does not shows on screen while entering
+  
+  tasks:
+  - name: print info
+    ansible.builtin.debug:
+      msg: "username is: {{ username }}, password is: {{ password }}"
+
+
+comand to execute -- ansible-playbook -i inventory.ini 07-vars.yaml
+
+output --
+Please enter your username
+sowjanya
+please enter your password
+
+
+ msg: "username is: sowjanya, password is: sowji123
+
+we can also use inventory to pass variables
+like a key & value pair i.e key=value
+
+inventory.ini
+=============
+[local]
+localhost
+
+[local:vars]	//when ansible targets local -- these variable will be printed
+COURSE: Ansible from inventory
+
+08-vars.yaml
+============
+- name: inventory variables
+  hosts: local
+  connection: local
+  tasks:
+  - name: print variables
+    ansible.builtin.debug:
+      msg: "Course is: {{ COURSE }}"
+
+comand to execute -- ansible-playbook -i inventory.ini 08-vars.yaml
+
+output: msg: "Course is: Ansible from inventory"

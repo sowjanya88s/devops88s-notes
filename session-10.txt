@@ -1,0 +1,183 @@
+HTTP status codes
+
+using domain -- deployment of expense project
+
+create 3 servers -- db , frontend, backend
+
+ami is updated so there is no need to update openssh while installing nodejs
+
+in place of mysql ip address we give domain name now like db.daws88s.online
+
+Root servers -- 13 root servers across the world managed by different organisations and goverments to control TLD's and part of ICANN. DNS resolutions requests from ISP comes to root servers
+TLD -- Top level domains, basically who sells the domains. It has the complete details of the domains booked, avaialalbe, buyer information, etc.
+Registars -- Who sells the domains, basically mediators between TLD and end users. Who can manage the domain too	
+NS -- Who is currently managing the domain, we can buy domain with one registar and we can transfer the management to another registar by updating NS records.
+	
+A record is mapping the IP address to domain
+ 
+we can't give multiple ip's on a single doamin
+sub domains
+db.daws88s.online -> give db private ip -- keep TTL as 1
+
+while loading schema also we can use db.daws88s.online like this
+
+to verify application is running successfully we can use below ways
+systemctl status
+netstat -lntp
+ps -ef | grep node
+curl http://localhost:8080/health
+telnet IP port
+
+backend.daws88s.online --backend private ip
+
+in nginx conf also mention this backend.daws88s.online
+
+frontend.daws88s.online -- dont give like this while giving domain name to public 
+daws88s.online -- map public ip
+
+open browser -- http://daws88s.online -- u can see our expense site
+if u enter characters in amount -- that data insertion will fails -- in that case ushould restart backend
+
+
+HTTP status codes
+===================
+
+http://daws88s.online/api/transaction
+GET
+200 OK
+
+in our expense project
+http://daws88s.online/api/transaction 
+insert -- POST -- 200 response
+delete -- 200 response
+
+GET
+200 OK
+
+generally used status codes and their meanings
+
+100 -> informational abou API
+Continuing or switching protocols from HTTPS to HTTP
+
+try with insert and delete operations
+2XX -> Success connecting to API
+	200 -> OK
+	201 -> Created
+	204 -> Deleted
+
+just refresh the tab	
+3XX -> redirectional or redirection of domain (request goes from one place to another place)
+	301 -> URL redirection permanent
+	302 -> temporary redirection
+	304 -> comes from Cache (not modified)
+
+	
+4XX -> Client side error
+	404 -> Not found (if we try to delete when there is nothing)
+	400 -> Bad request, invalid JSON (invalid data)
+	401 -> Unauthorised, no authentication (invalid credentials)
+	403 -> Forbidden, no permission to this (for ex when individual tries for full access)
+
+
+https://emacet.ap.gov.in/api/results/2026/ -> GOV admins
+
+https://emacet.ap.gov.in/api/results/2026/1234567 -- with hall ticket
+	
+{
+	"amountt": 200,
+	"description": ""
+}
+
+when application is running but not reflecting in browser
+5XX -> Server side error
+	500 -> Internal server error (backend or db problems or backend is not able to connect to db)
+	503 -> Service unavailable
+	504 --> bad gateway
+
+Linkedin Blog writing tips
+==========================
+Images
+crispy text
+
+Types of DNS records
+=====================
+NS  -> Nameservers, who is managing the domain
+SOA -> Start of authority
+by using NS & SOA we can transfer domain authority to anyone
+
+A -> IPv4
+AAAA -> IPv6
+MX -> Mail records
+gmail -- give free for public
+gmail -- paid for business
+if we want a mail with our domain(@sowjanya.com) name we approach gmail and they will charge for that and we have to update mx(mailx) records for that in our domain
+for ex we have to update smtp.google.com
+
+TXT -> for Verification (they will give content we have to update it in domain , they will try to access our domain , if they find the given value -- our domain verification become success -- during ssl renewal)
+CNAME	-> Canonical name, instead of ip address (in value) we can give another domain name
+
+nslookup checks for A record bydefault
+
+command : nslookup -type=CNAME <domain-name>
+it gives another domain name specified in cname
+
+kind of databases
+
+SQL
+======
+MySQL -- open source
+Mariadb
+Oracle --costly 
+Postgress
+MSSQL
+
+Schema -> Tables -> Rows and Columns
+for structural and transactional data -- we use SQL
+
+SQL is not good for huge amount of data and unstructured data or unrelated data
+
+NoSQL
+======
+MongoDB  -- popular 
+
+data is in documents -- json
+
+{
+	"name": "mouse",
+	"vendor": "amazon"
+}
+
+{
+	"name": "mouse",
+	"vendor": "amazon",
+	"faq": ""
+}
+
+proper data structure -> SQL
+un proper data structure, huge data -> NoSQL
+
+Redis -- NOSQL 
+======
+Caching Database, key value pair data
+
+Backend have to connect -> Database
+	1. Connecting establish -> Open
+	2. Request and response
+	3. Connection close
+if the above process is going on continuously we can't scale the application
+in this case applications becomes slow and pressure on internet increases  
+
+when Backend tries to connect to DB -> Cache(If not exist) -> Connects to DB -> Keep it inside Cache (cache contains time to live)
+if data exists in cache fetching of data becomes fast
+
+TTL -> get response
+
+Queue
+======
+http -> wait for 30 sec, if server is not responding then it shows error ,this is called synchronus
+
+in WhatsApp if we send a message to a person if he is not online it does not shows error , this message goes to WhatsApp queue , when other person comes to online this message goes to that person. this is called asynchronus
+joindevops -> Ramesh 
+
+
+ placed order-> delivery details

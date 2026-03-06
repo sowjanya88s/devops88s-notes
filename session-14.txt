@@ -1,0 +1,247 @@
+inode symlink hardlink
+======================
+
+inode = stores metadata of the file/directory
+
+file metadata -- extra info about file
+
+Linux stores metadata of the file in inode i.e
+file type --> file/directory/link
+owner & group details
+Permissions (rwx)
+size of file
+file creation & updation  details etc
+actual memory block address
+
+create empty file
+touch Linux.txt
+
+command to see info about inode number of all files in current path-- 
+ls -li 
+
+to see the info in inode --
+stat Linux.txt
+in output we can see size , blocks file type , links , modified & change & birth details
+
+enter some text in file
+stat Linux.txt
+now info changes and inode number also changes
+
+inode does not store actual file content
+
+
+symlink == shortlink == softlink
+1. it is like short cut to the file/folder
+2. inode number is different for symlink
+3. if actual file is removed, then symlink will break
+4. uses for backward compatability, switching versions and rollback is easy
+5. You can create symlink for folders and files also
+6. You can create symlink across different filesystem 
+filesystems can be -- xfs , ext3 , ext4
+
+now create one directory here
+mkdir softlinks
+command to create softlink of a file -- 
+syntax -- ln -s or ln <original-file-name> <link-file-name>
+ln -s ../Linux.txt soft-link
+this will create softlink of file Linux.txt in links folder with name soft-link
+permissions starting with l -- means softlink  && soft-link file points to original file Linux.txt
+now give command
+stat soft-link
+inode numbers of original file and softlink file are different
+
+sym link uses
+=============
+which yum
+output -- /usr/bin/yum
+which dnf
+output -- /usr/bin/dnf
+ls -l /usr/bin/dnf
+ls -l /usr/bin/yum
+both (/usr/bin/dnf & /usr/bin/yum) pointed to dnf-3 
+by this even if we enter in background dnf will be executed
+
+many companies developed projects using rhel-7 & rhel-8. so by suddenly updating yum with dnf they need to do many changes. to support backward compatibility they have pointed yum to dnf (because without breaking present system we need to do the updates)
+YUM -> Before RHEL-8 YUM is the package manager
+RHEL-8 DNF is the package manager
+
+now create dnf-3 file
+touch dnf-3
+ln -s dnf-3 dnf
+we can see dnf file points to -> dnf-3
+new version came dnf-4
+touch dnf-4
+to perform version switch without downtime point dnf-4 to dnf
+ln -fns dnf-4 dnf
+if any problem comes with dnf-4 , we will perfom rollback to dnf-3
+ln -fns dnf-3 dnf
+
+
+developers placed newly developed code in app-3
+create app-3 folder
+mkdir app-3
+create softlink as app
+ln -s app-3 app
+app-3 pointed to app folder
+app-3 update came i.e app-4
+mkdir app-4
+ln -snf app-4 app
+now app pointed to app-4
+if any problem comes with app-4 , we will perform rollback to app-3
+
+jenkins home directory -- /var/lib/jenkins -> jenkins-2.8
+jenkins-2.9 came
+/var/lib/jenkins -> jenkins-2.9
+
+
+Hardlink
+=========
+1. You can't create hardlink in another filesystem
+2. Hardlink is same as original file but can be different name
+3. hardlink inode numbers are same
+4. they points to same memory location, so memory is not wasted
+5. you can't create hardlink to folders
+6. hardlinks are used for backup.
+7. when all links are deleted, then only file will be deleted.
+if original file is deleted link file points to same memory block so it shows same data as original file. so hardlink works as backup
+
+note: files in different file systems can contain same inode number. it treats each mount point as different file system
+create empty file
+touch aws.txt
+creation of hardlink
+ln aws.txt aws-1.txt
+check inode numbers
+ls -li
+inode numbers will be same
+
+
+create hardlink in other folders within the same filesystem
+create directory
+mkdir app-3
+creation of hardlink
+ln aws-1.txt app-3/aws.txt
+ln aws-1.txt app-4/aws.txt
+using inode number and find command within the same FS we can find how many hard links are there for a file
+sudo find  /home -xdev -inum <inode-num>
+
+
+disadvantages of project manual configuration : 
+1. time taking
+2. human errors
+3. everytime from the scratch
+4. can't rely
+5. if no.of servers is increased manual way is not possible
+
+scripting
+===========
+place commands in a file and run it called scripting
+
+where to store scripts?
+======================
+to share the scripts we should use some centralized location i.e GIT
+in olden days people used SVN
+
+git -> vcs(version control system)
+the following things can be done by using GIT
+1. version control
+2. who did the changes, when did the changes
+3. if a problem comes , you can track who did the changes
+4. if some version failed, restoring of previous version is easy
+5. if new changes come -- review is also easy -> Pull Requests
+6. secure place to store the code
+
+if we made some changes -- we will push changes to GIT 
+new person will pull the changes from GIT to his system
+
+version control system is of two types
+1. centralized
+2. distributed  
+
+centralised vs distributed
+===========================
+in olden days, SVN is centralized version control system , code versions only available in SVN , our laptops doesn't contain different versions of code , our laptop contains only present version of code. so if SVN crashes , we can't get previous versions of code.
+SVN -> sub version control
+
+now GIT come with distributed control system , before pushing the code to GIT , we save our code to VSC (this is called as workspace) , after development completes we will add those files to staging area , then we will commit to local repo and then we will push that code to GIT.
+vsc (workspace) --> temp area(add) --> local repo(commit) --  git (remote) (push)
+when the code increases or new versions came, GIT only tracks difference of code and saves that only. so memory doesn't gets wasted. in every system where git is connected , we can see all versions of code.
+when system crashes , with the help of one new system to restore the entire history
+
+
+9 files 
+staging/temp area -> add 9 files to staging area
+then commit to local repo -> then push to git
+
+login to git -- in right side corner -- click profile icon -- create one organization (belongs to personal) -- with meaningful name -- in organization -- create one repository -- public repo -- repository is a storage space for code
+
+download Visual Studio Code for windows & install it -- for writing or editing code
+
+firstly , open one directory gitbash -- maintain all repos of git in one directory
+1. clone the repo -> first time download
+for ex u have one directory in local named practice 
+open gitbash -- goto practice -- give below command
+git config --global user.email "<ur-mail-id>"
+git config --global user.name "<ur-name>"
+
+(if u already have git -- credentials manager -- remove git credentials)
+
+git clone <https url of ur git repo>
+
+open VSC -- file -- open folder -- practice -- all repos of git will be shown
+when u navigate to repo -- main branch will be highlighted
+ls -al
+if u find .git folder in it -- it is a git repo
+when u navigate to folder -- no highlight
+no .git folder -- normal folder
+
+main/master is the default branch
+
+if a problem comes in repo , remove that repo completely by below command
+rm -r <repo-name>
+then clone the repo again
+
+VSC -- integrated development environment (we can find options)-- we can integrate it with different tools
+
+
+open VSC -- file -- open folder -- practice -- select one repo -- create file
+
+#!/bin/bash -> shebang
+we write code in shell script
+shebang is the interpreter of the code in shell script that checks and compiles for errors
+
+bash scripting == shell scripting
+
+to print anything in Linux server
+echo "hello world" -- output -- hello world
+# -- comment -- information purpose in a script file
+
+2. add files to staging area
+
+git add <file-name>
+git status
+if filename comes in red colour -- then ur code is in ur workspace
+if filename comes in green colour -- then ur code  not exists ur local repo 
+
+3. commit to local repo
+
+git commit -m "hello world completed"
+
+git push origin main 
+by above command ur code will be saved to git remote
+
+
+if u made changes or created new files in VSC
+git add . ; git commit -m "new code" ; git push origin main
+
+process to get code into Linux server
+install git in server
+git clone <https-url>
+cd <git-repo-name>
+ll
+command to execute script 
+sh <script-name>
+to get additional changes from git
+git pull
+
+don't edit files inside linux server...
+

@@ -1,0 +1,402 @@
+Automation of roboshop project with shell-script
+================================================
+create a repo in git -- roboshop-shell
+
+we have to create a script and it should create instances and it should create r53 records
+to create a instance we have to give 
+1. ami_id
+2. sg_id
+3. instance type
+4. subnet id (goes by default)
+
+we need to perform authentication for script
+don't give ur username $ pwd on command line -- by that anyone can use those crdentials and they can use them
+
+Alternatively we can use IAM(Indentity Access Management) -- by creating user here we can control our AWS account
+goto AWS console -- IAM -- create user -- with ur name -- provide access to AWS console
+attach policies directly (means AWS account full permissions) -- Administrator Access -- create user
+click on that username -- security credentials -- create Access key
+usage -- CLI -- i understand -- create 
+by using these access key & secret access key -- we can connect to aws account through command line only
+download .csv file -- because once this tab is closed -- we can't see those  -- we have to create them again
+
+aws console -- create server --connect to that server --
+
+aws configure
+give access key & secret access key here 
+region name : us-east-1
+output format: dont't give anything
+
+ls -la
+in .aws folder -- credentials -- ur access key & secret access key will be stored here
+cat config -- region name will be stored here
+
+aws s3 ls
+if no error u r able to connect to aws account successfully
+if u have any s3 buckets in ur us-east-1 region those bucket names will be shown as output
+
+now we start writing a script
+take ur security group id & give it in a variable
+take ami-id of ur devops-practice & give it in a variable
+we will pass instance names as arguments to the script and we will take them as $@ in script
+like this sh roboshop.sh mongodb catalogue
+
+for instance in $@
+do
+	echo $instance
+done
+
+search -- aws command to create instance & get the private ip of instance
+there is no need to provide subnet id -- then the instance will be created in default vpc & default subnet
+--query 'Instances[0].InstanceId' -- querying instance id from the output
+--tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=MyNewInstance}]' -- giving instance name by using tag 
+in console u can see - select any instance -- tags -- name -- <instance name> (what we have given while creating instance)
+if u make changes in name tag of instance it will be set
+we can add further details also like environment -- prod in tags -- these will represent metadata 
+
+default command
+aws ec2 run-instances --image-id <ami-id> --instance-type <instance-type> -- security-group-ids <security-group-id> --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=MyNewInstance}]' --query 'Instances[0].InstanceId' --output text
+by this we can see all the data about our instance except public id
+to generate public id -- it takes some time
+
+modify this according to ur requirements
+aws ec2 run-instances \
+--image-id ami-0220d79f3f480ecf5 \
+--instance-type t3.micro  \
+--security-group-ids sg-076ec9ad23dab2b28 \
+--tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$instance}]"  \
+--query 'Instances[0].InstanceId' \
+--output text
+
+take above command into a variable called instance id then it places instance id in it
+
+we are querying instance id by above command
+in output we can see -- instance id -- i-01d7830788a10d3d3
+
+by instance id we can get public ip address -- by using below command
+aws ec2 describe-instances --instance-ids i-01d7830788a10d3d3 --query 'Reservations[].Instances[].PublicIpAddress' --output text
+give above command into ip -- it stores regarding ip (public or private) in that
+
+check if instance name is frontend or not
+	if instance name is frontend get the public ip
+	else get the private ip
+
+for better readability we can add line breaks by using \ (forward slash)
+
+if u script upto now -- it will show private ip of instance as output
+
+now e have to update AWS R53 records
+
+create variables for zone_id & domain name
+
+goto aws R53 -- click on hosted zone -- we can see hosted zone id
+we create A records with below format
+for front end -- give ur domain name directly
+for remaining all -- <instance-name>.<domain-name>
+
+code for creation of R53 -- A records --
+aws route53 change-resource-record-sets --hosted-zone-id HOSTED-ZONE-ID --change-batch '
+{
+"comment": "UPSERT",
+"ResourceRecordSet": {
+"Name": "'$RECORD_NAME'",
+"Type": "A",
+"TTL": 1,
+"ResourceRecords": [
+{
+"Value": "'$IP'"
+} ] } } ] } '
+
+roboshop.sh
+============
+#!/bin/bash
+
+SG_ID="sg-076ec9ad23dab2b28" # replace with your ID
+AMI_ID="ami-0220d79f3f480ecf5"
+ZONE_ID="Z05013202FKF0ZL12WAOP"
+DOMAIN_NAME="daws88s.online"
+
+for instance in $@
+do
+    INSTANCE_ID=$( aws ec2 run-instances \
+    --image-id $AMI_ID \
+    --instance-type "t3.micro" \
+    --security-group-ids $SG_ID \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$instance}]" \
+    --query 'Instances[0].InstanceId' \
+    --output text )
+
+    if [ $instance == "frontend" ]; then
+        IP=$(
+            aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[].Instances[].PublicIpAddress' \
+            --output text
+        )
+        RECORD_NAME="$DOMAIN_NAME" # daws88s.online
+    else
+        IP=$(
+            aws ec2 describe-instances \
+            --instance-ids $INSTANCE_ID \
+            --query 'Reservations[].Instances[].PrivateIpAddress' \
+            --output text
+        )
+        RECORD_NAME="$instance.$DOMAIN_NAME" # mongodb.daws88s.online
+    fi
+
+    echo "IP Address: $IP"
+
+    aws route53 change-resource-record-sets \
+    --hosted-zone-id $ZONE_ID \
+    --change-batch '
+    {
+        "Comment": "Updating record",
+        "Changes": [
+            {
+            "Action": "UPSERT",
+            "ResourceRecordSet": {
+                "Name": "'$RECORD_NAME'",
+                "Type": "A",
+                "TTL": 1,
+                "ResourceRecords": [
+                {
+                    "Value": "'$IP'"
+                }
+                ]
+            }
+            }
+        ]
+    }
+    '
+
+    echo "record updated for $instance"
+
+done
+
+command to execute the script -- sh roboshop.sh mongodb catalogue
+
+output
+-------
+this will create 2 instances with names mongodb catalogue and their respective R53 records
+
+now we will write shell scripts to configure catalogue and mongodb with the help of roboshop documentation
+
+for every script we have to do -- 
+1. check root user or not
+2. if root user continue, otherwise error
+3. place colors
+4. place logs
+5. write validate function
+6.check exit status after evry command
+
+vim editor is only for humans
+without opening file we can make changes by using
+
+sed editor -> streamline editor
+insert text after line 1
+
+sed '1a Hi' users -> add the text -- a for after line 1 -- 
+by default streamline editor makes temporary edit only on screen. for permanent changes use -i option
+
+sed '1i Hello' users -> before line 1
+sed '/sbin/d' -> deletes all the lines with text matching sbin/d
+sed '2d' -> delete 2nd line
+
+sed '2s/sbin/SBIN/g' users -> replace sbin with SBIN in 2nd line all occurences
+
+sed 's/sbin/SBIN/g' -> all lines all occurences
+
+connect to mongodb instance and run below script
+
+install git & clone git repo 
+
+place mongo.repo in cucurrent git folder -- roboshop-shell
+
+mongodb.sh
+==========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+cp mongo.repo /etc/yum.repos.d/mongo.repo
+VALIDATE $? "Copying Mongo Repo" 
+
+dnf install mongodb-org -y &>>$LOGS_FILE
+VALIDATE $? "Installing MongoDB server"
+
+systemctl enable mongod &>>$LOGS_FILE
+VALIDATE $? "Enable MongoDB"
+
+systemctl start mongod
+VALIDATE $? "Start MongoDB"
+
+sed -i 's/127.0.0.1/0.0.0.0/g' /etc/mongod.conf
+VALIDATE $? "Allowing remote connections"
+
+systemctl restart mongod
+VALIDATE $? "Restarted MongoDB"
+
+command to execute the script -- sh mongodb.sh
+
+
+netstat -lntp
+we should see 27017 port
+
+now we will config of catalogue using shell script
+
+connect to catalogue instance and run below script
+
+install git & clone git repo 
+
+place catalogue.repo in cucurrent git folder -- roboshop-shell
+
+catalogue.sh
+=============
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MONGODB_HOST=mongodb.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf module disable nodejs -y &>>$LOGS_FILE
+VALIDATE $? "Disabling NodeJS Default version"
+
+dnf module enable nodejs:20 -y &>>$LOGS_FILE
+VALIDATE $? "Enabling NodeJS 20"
+
+dnf install nodejs -y &>>$LOGS_FILE
+VALIDATE $? "Install NodeJS"
+
+id roboshop &>>$LOGS_FILE
+if [ $? -ne 0 ]; then
+    useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOGS_FILE
+    VALIDATE $? "Creating system user"
+else
+    echo -e "Roboshop user already exist ... $Y SKIPPING $N"
+fi
+
+mkdir -p /app 
+VALIDATE $? "Creating app directory"
+
+curl -o /tmp/catalogue.zip https://roboshop-artifacts.s3.amazonaws.com/catalogue-v3.zip  &>>$LOGS_FILE
+VALIDATE $? "Downloading catalogue code"
+
+cd /app
+VALIDATE $? "Moving to app directory"
+
+rm -rf /app/*
+VALIDATE $? "Removing existing code"
+
+unzip /tmp/catalogue.zip &>>$LOGS_FILE
+VALIDATE $? "Uzip catalogue code"
+
+npm install  &>>$LOGS_FILE
+VALIDATE $? "Installing dependencies"
+
+cp $SCRIPT_DIR/catalogue.service /etc/systemd/system/catalogue.service
+VALIDATE $? "Created systemctl service"
+
+systemctl daemon-reload
+systemctl enable catalogue  &>>$LOGS_FILE
+systemctl start catalogue
+VALIDATE $? "Starting and enabling catalogue"
+
+cp $SCRIPT_DIR/mongo.repo /etc/yum.repos.d/mongo.repo
+dnf install mongodb-mongosh -y &>>$LOGS_FILE
+
+INDEX=$(mongosh --host $MONGODB_HOST --quiet  --eval 'db.getMongo().getDBNames().indexOf("catalogue")')
+
+if [ $INDEX -le 0 ]; then
+    mongosh --host $MONGODB_HOST </app/db/master-data.js
+    VALIDATE $? "Loading products"
+else
+    echo -e "Products already loaded ... $Y SKIPPING $N"
+fi
+
+systemctl restart catalogue
+VALIDATE $? "Restarting catalogue"
+
+command to execute the script -- sh catalogue.sh
+
+health check command
+curl -I http://localhost:8080/health
+output
+{"app":"OK", "mongo":true}
+
+
+if u run the script for 2nd time -- it will throws error
+
+idempotency -> if you run the script any number of times, it should give the same result
+
+shell script does not tells u if user or directory already exists , we should check them
+
+we should check user already exists or not
+if exists we should skip 
+if not , we should create
+
+if app directory does not exists it will creates the directory , if exists ignores
+mkdir -p /app
+
+while copying catalogue.service file -- if it throws error -- variblise the script directory and then try again
+
+while unzipping code -- if try unzipping the code for 2nd time -- it will asks u to  replace or delete the code
+in that case script can't make decision
+so first remove the code in that directory and then  unzip the code
+
+copy mongo repo and then install mongo repo
+give mongo url -- A record in a variable
+
+be careful while loading the data in db
+check mongodb if data exists or not
+mongosh --host $MONGODB_HOST --quiet  --eval 'db.getMongo().getDBNames().indexOf("catalogue")
+if output of above command is -1 then -- data does not exists
+if output of above command is 1 then -- data already exists
+take that value into index varaiable 
+
+if index is less than 0 the load data & restart catalogue service
+
+

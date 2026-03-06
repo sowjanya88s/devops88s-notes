@@ -1,0 +1,633 @@
+create instances using shell script -- create-instances
+
+lets see the config for redis using shell script
+
+sed -i -- permanent changes
+sed -e -- extra parameters
+
+we need to change the ip in conf file 127.0.0.1 to 0.0.0.0
+we need to change protection mode from yes to no
+when sed --  sees see protected-mode -- /c -- change that line to new line protected-mode no
+
+redis.sh
+========
+
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf module disable redis -y &>>$LOGS_FILE
+dnf module enable redis:7 -y &>>$LOGS_FILE
+VALIDATE $? "Enable Redis:7"
+
+dnf install redis -y  &>>$LOGS_FILE
+VALIDATE $? "Installed Redis"
+
+sed -i -e 's/127.0.0.1/0.0.0.0/g' -e '/protected-mode/ c protected-mode no' /etc/redis/redis.conf
+VALIDATE $? "Allowing remote connections"
+
+systemctl enable redis &>>$LOGS_FILE
+systemctl start redis 
+VALIDATE $? "Enabled and started Redis"
+
+command to execute -- sh redis.sh
+
+commad to check port is opened or not -- redis port number -- 6379
+netstat -lntp
+
+
+
+all nodejs applications runs on port 8080
+command for health check of nodejs application -- curl http://localhost:8080/health
+lets see the config for cart using shell script
+
+copy cart.service file to roboshop-shell
+in service file -- change domain names of dependancies
+
+cart.sh
+========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MONGODB_HOST=mongodb.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf module disable nodejs -y &>>$LOGS_FILE
+VALIDATE $? "Disabling NodeJS Default version"
+
+dnf module enable nodejs:20 -y &>>$LOGS_FILE
+VALIDATE $? "Enabling NodeJS 20"
+
+dnf install nodejs -y &>>$LOGS_FILE
+VALIDATE $? "Install NodeJS"
+
+id roboshop &>>$LOGS_FILE
+if [ $? -ne 0 ]; then
+    useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOGS_FILE
+    VALIDATE $? "Creating system user"
+else
+    echo -e "Roboshop user already exist ... $Y SKIPPING $N"
+fi
+
+mkdir -p /app 
+VALIDATE $? "Creating app directory"
+
+curl -o /tmp/cart.zip https://roboshop-artifacts.s3.amazonaws.com/cart-v3.zip  &>>$LOGS_FILE
+VALIDATE $? "Downloading cart code"
+
+cd /app
+VALIDATE $? "Moving to app directory"
+
+rm -rf /app/*
+VALIDATE $? "Removing existing code"
+
+unzip /tmp/cart.zip &>>$LOGS_FILE
+VALIDATE $? "Uzip cart code"
+
+npm install  &>>$LOGS_FILE
+VALIDATE $? "Installing dependencies"
+
+cp $SCRIPT_DIR/cart.service /etc/systemd/system/cart.service
+VALIDATE $? "Created systemctl service"
+
+systemctl daemon-reload
+systemctl enable cart  &>>$LOGS_FILE
+systemctl start cart
+VALIDATE $? "Starting and enabling cart"
+
+command to execute -- sh redis.sh
+
+copy user.service file to roboshop-shell
+in service file -- change domain names of dependancies
+
+user.sh
+========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MONGODB_HOST=mongodb.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf module disable nodejs -y &>>$LOGS_FILE
+VALIDATE $? "Disabling NodeJS Default version"
+
+dnf module enable nodejs:20 -y &>>$LOGS_FILE
+VALIDATE $? "Enabling NodeJS 20"
+
+dnf install nodejs -y &>>$LOGS_FILE
+VALIDATE $? "Install NodeJS"
+
+id roboshop &>>$LOGS_FILE
+if [ $? -ne 0 ]; then
+    useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOGS_FILE
+    VALIDATE $? "Creating system user"
+else
+    echo -e "Roboshop user already exist ... $Y SKIPPING $N"
+fi
+
+mkdir -p /app 
+VALIDATE $? "Creating app directory"
+
+curl -o /tmp/user.zip https://roboshop-artifacts.s3.amazonaws.com/user-v3.zip  &>>$LOGS_FILE
+VALIDATE $? "Downloading user code"
+
+cd /app
+VALIDATE $? "Moving to app directory"
+
+rm -rf /app/*
+VALIDATE $? "Removing existing code"
+
+unzip /tmp/user.zip &>>$LOGS_FILE
+VALIDATE $? "Uzip user code"
+
+npm install  &>>$LOGS_FILE
+VALIDATE $? "Installing dependencies"
+
+cp $SCRIPT_DIR/user.service /etc/systemd/system/user.service
+VALIDATE $? "Created systemctl service"
+
+systemctl daemon-reload
+systemctl enable user  &>>$LOGS_FILE
+systemctl start user
+VALIDATE $? "Starting and enabling user"
+
+command to execute -- sh user.sh
+
+let see the configuration of mysql using shell script
+
+mysql.sh
+=========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf install mysql-server -y &>>$LOGS_FILE
+VALIDATE $? "Install MySQL server"
+
+systemctl enable mysqld &>>$LOGS_FILE
+systemctl start mysqld  
+VALIDATE $? "Enable and start mysql"
+
+# get the password from user
+mysql_secure_installation --set-root-pass RoboShop@1 #we can pass pwd as argument with script by using read command
+VALIDATE $? "Setup root password"
+
+command to execute -- sh mysql.sh
+
+let see the configuration of payment using shell script
+install python packages
+python -- depeendancies -- pip
+
+payment.sh
+==========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MYSQL_HOST=mysql.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf install python3 gcc python3-devel -y &>>$LOGS_FILE
+VALIDATE $? "Installing Python"
+
+id roboshop &>>$LOGS_FILE
+if [ $? -ne 0 ]; then
+    useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOGS_FILE
+    VALIDATE $? "Creating system user"
+else
+    echo -e "Roboshop user already exist ... $Y SKIPPING $N"
+fi
+
+mkdir -p /app 
+VALIDATE $? "Creating app directory"
+
+curl -o /tmp/payment.zip https://roboshop-artifacts.s3.amazonaws.com/payment-v3.zip  &>>$LOGS_FILE
+VALIDATE $? "Downloading payment code"
+
+cd /app
+VALIDATE $? "Moving to app directory"
+
+rm -rf /app/*
+VALIDATE $? "Removing existing code"
+
+unzip /tmp/payment.zip &>>$LOGS_FILE
+VALIDATE $? "Uzip payment code"
+
+cd /app 
+pip3 install -r requirements.txt &>>$LOGS_FILE
+VALIDATE $? "Installing dependencies"
+
+cp $SCRIPT_DIR/payment.service /etc/systemd/system/payment.service
+VALIDATE $? "Created systemctl service"
+
+systemctl daemon-reload
+systemctl enable payment &>>$LOGS_FILE
+systemctl start payment
+VALIDATE $? "Enabled and started payment"
+
+command to execute -- sh payment.sh
+
+add rabbitmq.repo in roboshop-shell repo
+rabbitmq port number -- 5672
+check whether it is opened or not
+
+rabbitmq.sh
+===========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MYSQL_HOST=mysql.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+cp $SCRIPT_DIR/rabbitmq.repo /etc/yum.repos.d/rabbitmq.repo
+VALIDATE $? "Added RabbitMQ repo"
+
+dnf install rabbitmq-server -y &>>$LOGS_FILE
+VALIDATE $? "Installing RabbitMQ server"
+
+systemctl enable rabbitmq-server &>>$LOGS_FILE
+systemctl start rabbitmq-server
+VALIDATE $? "Enabled and started rabbitmq"
+
+rabbitmqctl add_user roboshop roboshop123 &>>$LOGS_FILE
+rabbitmqctl set_permissions -p / roboshop ".*" ".*" ".*" &>>$LOGS_FILE
+VALIDATE $? "created user and gien permissions"
+
+command to execute -- sh rabbitmq.sh
+
+shipping is developed based on java
+build tool -- maven
+checking idempotency --
+mysql -h $MYSQL_HOST -uroot -pRoboShop@1 -e 'use cities' -- here we are checking cities database exists or not in non interactive mode
+if schema exists then exit status code will be 0 -- data is loaded
+if schema does not exists then exit status code will be 0 -- data not loaded
+
+shipping.sh
+============
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MYSQL_HOST=mysql.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf install maven -y &>>$LOGS_FILE
+VALIDATE $? "Installing Maven"
+
+id roboshop &>>$LOGS_FILE
+if [ $? -ne 0 ]; then
+    useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOGS_FILE
+    VALIDATE $? "Creating system user"
+else
+    echo -e "Roboshop user already exist ... $Y SKIPPING $N"
+fi
+
+mkdir -p /app 
+VALIDATE $? "Creating app directory"
+
+curl -o /tmp/shipping.zip https://roboshop-artifacts.s3.amazonaws.com/shipping-v3.zip  &>>$LOGS_FILE
+VALIDATE $? "Downloading shipping code"
+
+cd /app
+VALIDATE $? "Moving to app directory"
+
+rm -rf /app/*
+VALIDATE $? "Removing existing code"
+
+unzip /tmp/shipping.zip &>>$LOGS_FILE
+VALIDATE $? "Uzip shipping code"
+
+cd /app 
+mvn clean package &>>$LOGS_FILE
+VALIDATE $? "Installing and Building shipping"
+
+mv target/shipping-1.0.jar shipping.jar 
+VALIDATE $? "Moving and Renaming shipping"
+
+cp $SCRIPT_DIR/shipping.service /etc/systemd/system/shipping.service
+VALIDATE $? "Created systemctl service"
+
+dnf install mysql -y  &>>$LOGS_FILE
+VALIDATE $? "Installing MySQL"
+
+mysql -h $MYSQL_HOST -uroot -pRoboShop@1 -e 'use cities'
+if [ $? -ne 0 ]; then
+
+    mysql -h $MYSQL_HOST -uroot -pRoboShop@1 < /app/db/schema.sql &>>$LOGS_FILE
+    mysql -h $MYSQL_HOST -uroot -pRoboShop@1 < /app/db/app-user.sql &>>$LOGS_FILE
+    mysql -h $MYSQL_HOST -uroot -pRoboShop@1 < /app/db/master-data.sql &>>$LOGS_FILE
+    VALIDATE $? "Loaded data into MySQL"
+else
+    echo -e "data is already loaded ... $Y SKIPPING $N"
+fi
+
+systemctl enable shipping &>>$LOGS_FILE
+systemctl start shipping
+VALIDATE $? "Enabled and started shipping"
+
+command to execute -- sh shipping.sh
+
+install nginx -- it acts as reverse proxy here
+make changes in nginx.conf file
+
+frontend.sh
+===========
+#!/bin/bash
+
+USERID=$(id -u)
+LOGS_FOLDER="/var/log/shell-roboshop"
+LOGS_FILE="$LOGS_FOLDER/$0.log"
+R="\e[31m"
+G="\e[32m"
+Y="\e[33m"
+N="\e[0m"
+SCRIPT_DIR=$PWD
+MONGODB_HOST=mongodb.daws88s.online
+
+if [ $USERID -ne 0 ]; then
+    echo -e "$R Please run this script with root user access $N" | tee -a $LOGS_FILE
+    exit 1
+fi
+
+mkdir -p $LOGS_FOLDER
+
+VALIDATE(){
+    if [ $1 -ne 0 ]; then
+        echo -e "$2 ... $R FAILURE $N" | tee -a $LOGS_FILE
+        exit 1
+    else
+        echo -e "$2 ... $G SUCCESS $N" | tee -a $LOGS_FILE
+    fi
+}
+
+dnf module disable nginx -y &>>$LOGS_FILE
+dnf module enable nginx:1.24 -y &>>$LOGS_FILE
+dnf install nginx -y &>>$LOGS_FILE
+VALIDATE $? "Installing Nginx"
+
+systemctl enable nginx  &>>$LOGS_FILE
+systemctl start nginx 
+VALIDATE $? "Enabled and started nginx"
+
+rm -rf /usr/share/nginx/html/* 
+VALIDATE $? "Remove default content"
+
+curl -o /tmp/frontend.zip https://roboshop-artifacts.s3.amazonaws.com/frontend-v3.zip &>>$LOGS_FILE
+cd /usr/share/nginx/html 
+unzip /tmp/frontend.zip &>>$LOGS_FILE
+VALIDATE $? "Downloaded and unzipped frontend"
+
+rm -rf /etc/nginx/nginx.conf
+
+cp $SCRIPT_DIR/nginx.conf /etc/nginx/nginx.conf
+VALIDATE $? "Copied our nginx conf file"
+
+systemctl restart nginx
+VALIDATE $? "Restarted Nginx"
+
+command to execute -- sh frontend.sh
+
+open browser -- give ur domain name -- sowjanya.fine -- and check the functionality of website 
+create user account -- browse catalogue -- add products to cart -- give ur address -- place order -- ur order should be placed successfully
+
+now lets see configuration of dispatch -- dispatch is not part of roboshop -- it's a third party tool
+dispatch server has access to rabbitmq -- so its gets message from queue about order details
+
+dispatch is developed by using go language so install go language
+dnf install golang -y
+
+create app directory
+
+downloads the code to /tmp directory & unzip it in /app directory
+
+in main.go file u can see dependancies
+
+go mod init dispatch --- go module initializes the dispatch
+this will creates go.mod file
+
+go get -- gets dependancies
+go build -- builds the code
+by this dispatch file wiil be created
+
+create dispatch.service file and change rabbitmq ip there give a record of it
+
+now check logs -- tail -f /var/log/messages
+
+once u placed ur order then all the details regarding to it -- u can see in logs of dispatch
+this message will be handled by dispatch service
+
+in every module of application -- there is some repeated code (validate function & checking root user & colors & logs files) 
+we can place the  common code in common.sh -- give ./common.sh in all other files which uses this common code
+
+How to call one script from another script
+$$ -- gets current process instance id
+to call script-2 from script-1 we have two methods
+1. calling directly using sh command -- sh <script-name>.sh
+2. calling by using source command 
+
+
+sh script-2.sh -> seperate process, can't access script-1 variables -- gives different process ids
+source ./22-script-2.sh -> same process, can access script-1 variables -- gives same process ids
+
+when u give any command -- linux checks that command is available in any of below paths
+
+give below command to know command related paths -- echo $PATH
+/home/ec2-user/.local/bin:
+/home/ec2-user/bin:
+/usr/local/bin:
+/usr/bin:
+/usr/local/sbin:
+/usr/sbin
+
+to tell source command is in current directory -- ./ 
+
+21-script-1.sh
+===============
+#!/bin/bash
+
+COUNTRY=INDIA
+
+echo "I am in: $COUNTRY"
+echo "PID of SCRIPT-1: $$"
+
+#sh 22-script-2.sh  -- try this 1st
+source ./22-script-2.sh #2nd method
+
+connect to instance -- execution command -- sh 21-script-1.sh
+output
+I am in: INDIA
+PID of SCRIPT-1: 1500
+I am in:
+PID of SCRIPT-2: 10312
+
+
+
+22-script-2.sh
+==============
+#!/bin/bash
+
+echo "I am in: $COUNTRY"
+echo "PID of SCRIPT-2: $$"
+
+command to execute when u give source -- sh script-1.sh
+output 
+I am in: INDIA
+PID of SCRIPT-1: 11396
+I am in: INDIA
+PID of SCRIPT-2: 11396
+
+
+
+

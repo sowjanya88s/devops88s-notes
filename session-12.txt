@@ -1,0 +1,197 @@
+shipping & payment are java related applications
+
+small applications will be developed -- nodejs
+major applications -- java
+
+Java
+=====
+Build tool -> Ant, Maven, Gradle, etc.
+nowadays maven and gradle are used
+file extension -- .java
+
+JDK -> Java development kit
+JRE -> Java Runtime environment
+
+while developing application we need JDK
+while running JRE is enough
+JDK & JRE are just softwares
+JDK = JRE + development utilities
+
+we need to compile the source code then we get byte code
+
+Source code (high level code) -> Compile -> Byte code (intermediate code) -> 0 and 1(low level code)
+node js execution = compile + running at a time
+java = first compilation and then running directly
+-- by this application runs a bit faster compared to nodejs application
+
+Build tool = Maven
+output format after compilation -> .ear, .war, .jar
+.ear -- enterprise archive file
+.war -- web archive file
+.jar -- java archive file
+.jar has inbuilt lightweight server
+
+Old Enterprise applications -> IBM Websphere, Oracle weblogic, JBOSS EAP, etc.. also known as middleware 
+===========================
+they install  IBM Websphere, Oracle weblogic, JBOSS EAP (heavy weight servers) and then they download application 
+used in banking applications
+enterprise archive file = frontend+backend+libraries -> .ear -- roboshop.ear
+
+disadvantages
+1. tight couple
+2. if there is a small problem makes both frontend and backend down
+3. a small change is also costly. for any small change, end to end testing should be done again
+4. everytime frontend components(Jquery, Angular JS, etc.) should be downloaded from server
+by that time and effort gets wasted
+
+here they use physical servers, once u order physical server it takes atleast one month to deliver
+if the application is big , it contains huge infra so cost increases, so scaling of application becomes difficult
+
+Monolithic -> Apache Tomcat, JBOSS Application Server, etc.(lightweight)
+=============
+.war file
+seperate frontend and seperate backend
+
+advantages
+1. easy maintanence
+2. data only will be served by backend through API 
+3. loose coupling
+
+problems
+=========
+1. problem in catalogue makes entire backend down
+2. entire application should be developed in same programming language
+3. tight coupling between backend components
+
+here they used virtualization -- logical division of computer hardware into different virtual servers, in virtual servers we can run install any os
+if problem comes in monolithic it takes atleast 30mins to find where the problem is
+
+Microservices -> inbuilt servers
+=============
+catalogue, user, cart, etc..
+
+1. each component is independent
+2. diff programming languages can be used
+3. problem in one component cannot disturb other components
+
+these are very small there is no need to run a vm
+when application size decreases huge servers are not needed
+functionality is same we divided the components for easy maintenance
+
+nano services -- signup as one application & signin as other application
+application size becomes low
+
+1)config of java application
+
+maven is the build 
+.jar -- output file
+.jar has inbuilt lightweight server
+
+
+nodejs =  node + npm
+maven = java + maven
+if u install maven it installs java inbuilt
+
+environment needed to run application
+programming language == programming runtime
+mvn clean package -> clean previous builds + install dependencies + pack the application
+the above process is done by using build file pom.xml (project object model)
+mvn clean package -- a new directory target will be created
+inside target folder -- shipping-1.0.jar --contains application and inbuilt server
+
+nodejs does not need server
+move shipping-1.0.jar and rename it
+and now create service file and make changes in it
+shipping depends on mysql so we need to install mysql
+
+2) mysql configuration
+install mysql-server and set root password
+make sure it is running on port 3306
+
+now go back to shipping reload the daemon and start shipping but it does not starts because shipping expects database and tables
+but tables and database are not here for that we need to load the schema
+for that we need to install mysql client package
+schema is in /app/db i.e schema.sql , load it
+app-user.sql contains creation of user on database , load it
+master-data.sql contains huge data regarding all countries , states , villages information , load this
+
+go into mysql-server
+
+check databases -- ushould see cities db
+tables -- cities and codes
+
+run below commands 
+select count(*) from cities;
+select count(*) from codes;
+
+now restart shipping application
+command to check logs -- journalctl -u shipping -f
+command for full details with helath check -- curl -v http://localhost:8080/health
+
+3) payment application configuration 
+payment application is developed by using python
+ 
+
+
+Python
+============
+file extension -- .py
+build tool -- pip
+dependancies -- requirements.txt
+
+install python -- dnf install python3 gcc python3-devel -y
+
+python is 2 types
+
+1. OOPS -- developers use this
+2. Scripting -- used for automation
+
+for payments we need rabbitmq database
+
+so lets setup rabbitmq database
+
+4) setup of rabbitmq database
+
+connect to rabbitmq db -- add rabbitmq repo 
+install rabbitmq-server package and then enable and start 
+add user and set password and give permissions for all queues
+rabbitmq opens 5672 port
+
+now goto payments server
+create system user and create /app directory
+download application code and unzip it in /app 
+
+pip3 install -r requirements.txt -- installs dependancies
+
+create payment service and make changes in it -- change dependancies urls or hosts
+then reload the daemon and then enable and start
+perform health check on backend components only
+
+now got fronten server and open nginx.conf file and change location of all backend components
+and then restart nginx
+
+open browser -- http://sowjanya.fine -- us hould see the application -- check all components whether they are working or not
+
+when problem occurs -- u should check
+frontend logs -> backend component logs -> DB is running fine or not
+
+now stop catalogue service -- reload the url in the browser -- click on catalogue -- inspect -- u will see 404 error 
+because developers does not implemented 50X.html page in /usr/share/nginx/html
+u write that code with the help of chatgpt -- then refresh the browser , u can see 502 (bad gateway)  error
+
+now start catalogue and stop mongodb -- 500 internal server
+
+problem may come in --
+1. frontend nginx config recheck
+2. backend may not be running
+3. data is not loaded into DB
+4. database is not running
+5. DNS records are not updated
+
+502 -> Bad gateway -> proxy server not able to get response from upstream server
+500 -> internal server error -> proxy able to reach upstream server, but proper response is not there
+400 -- frontend configuartion problem
+
+https://typegrow.com/tools/linkedin-text-formatter
+
+https://www.linkedin.com/posts/sivakumar-reddy-mettukuru_devops-cloudcomputing-sre-activity-7420307090109259776-ylTD?utm_source=share&utm_medium=member_desktop&rcm=ACoAABDIcU0BU8bgQnwg0jN1W2BYG8lApo6P9Ec

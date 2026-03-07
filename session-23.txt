@@ -1,0 +1,414 @@
+launch one instance -- 
+server where we have installed ansible is called ansible controller
+while creating instance -- advanced -- user data --
+#!/bin/bash
+yum install ansible -y
+these commands given in user data will be executed in server while creating instance
+clone ansible repo from git
+
+open ansible repo in vsc -- 
+create one file --
+
+vars-from-args.yaml
+===================
+- name: variables from args
+  hosts: local
+  connection: local
+  tasks:
+  - name: print variables from args
+    ansible.builtin.debug:
+      msg: "Hi {{ NAME }}, Good Morning"
+
+command to execute -- ansible-playbook -i inventory.ini -e  "NAME=sowjanya" vars-from-args.yaml 
+
+output
+"msg" : "Hi sowjanya, Good Morning" 
+
+now give the same variable at all levels , by that we can check which variable is preferenced first
+1. args
+2. task
+3. file
+4. prompt
+5. play
+6. inventory
+if not found anyone of above paths , it will throw undefined variable
+
+vars-preference.yaml
+====================
+- name: variable preference
+  hosts: local
+  connection: local
+  # vars:
+  #   NAME: "Ansible from PLAY"
+  # vars_files:
+  # - course.yaml
+  # vars_prompt:
+  # - name: NAME
+  #   prompt: Please enter name
+  #   private: false
+  tasks:
+  - name: print name
+    # vars:
+    #   NAME: "Ansible from TASK"
+    ansible.builtin.debug:
+      msg: "Hi {{ NAME }}"
+
+we will see data types now
+
+data-types.yaml
+================
+- name: demo on data types
+  hosts: local
+  connection: local
+  vars:
+    PROGRAM: "DevSecOps with AWS" # string
+    DURATION: 140 # int/number
+    IS_LIVE: true # bool
+    DETAILS: # map/dictionary {} data is in key value pair
+      MONTHS: 4
+      TRAINER: "Sivakumar Reddy"
+    TOPICS: # list - starts with /[]
+    - Linux
+    - Shell
+    - Ansible
+  tasks:
+  - name: print variables
+    ansible.builtin.debug:
+      msg: | //to print multiple lines use / symbol
+        Program: {{ PROGRAM }}
+        Duration: {{ DURATION }}
+        Is Live?: {{ IS_LIVE }}
+        Details: {{ DETAILS }}
+        Topics: {{ TOPICS }}
+
+command to execute -- ansible-playbook -i inventory.ini -e data-types.yaml 
+
+we will see conditions now
+conditions are useful in ansible to run a task or not
+when is the condition here -- is-live = true then "yes , it is live " will be printed on screen
+otherwise nothing prints
+
+conditions.yaml
+===============
+- name: demo on conditions
+  hosts: local
+  connection: local
+  vars:
+    IS_LIVE: false  //true -- try with
+  tasks:
+  - name: check Live or not
+    ansible.builtin.debug:
+      msg: "Yes, it is Live"
+    when: IS_LIVE
+
+command to execute -- ansible-playbook -i inventory.ini  conditions.yaml
+
+we will write one more condition -- checking whether a number is less than 10 or not
+
+conditions.yaml
+===============
+- name: check a number less than 10 or not
+  hosts: local
+  connection: local
+  vars:
+    NUMBER_OF_SESSIONS: 7
+  tasks:
+  - name: is ansible more than 5 sessions
+    ansible.builtin.debug:
+      msg: "Yes, more than 5 sessions"
+    when: NUMBER_OF_SESSIONS > 5
+
+command to execute -- ansible-playbook -i inventory.ini  conditions.yaml
+
+if number of sessions value is greater than 7 it prints  "Yes, more than 5 sessions"
+
+when ansible connect to one server , it will run gathering facts -- nothing but system related data will be taken  in variables called ansible_facts. now we will print that data
+
+facts.yaml
+==========
+- name: gathering facts
+  hosts: local
+  connection: local
+  tasks:
+  - name: print facts
+    ansible.builtin.debug:
+      msg: "{{ ansible_facts }}"
+
+command to execute -- ansible-playbook -i inventory.ini facts.yaml
+
+ all data will be printed in json format
+in that json data in os_family / distribution key u can see our server os as value
+
+below program takes os data from ansible_facts and prints related msg 
+
+facts.yaml
+==========
+- name: gathering facts
+  hosts: local
+  connection: local
+  tasks:
+  - name: print facts
+    ansible.builtin.debug:
+      msg: "{{ ansible_facts }}"
+
+  - name: check redhat or not
+    ansible.builtin.debug:
+        msg: "Yes, package manager is RedHat"
+    when: ansible_facts.os_family == "RedHat"
+
+  - name: check Debian or not
+    ansible.builtin.debug:
+      msg: "Yes, package manager is Debian"
+    when: ansible_facts.os_family == "Debian"
+
+command to execute -- ansible-playbook -i inventory.ini facts.yaml
+
+in shell script we will execute command by placing it in $() and we will take it in a variable
+
+now we see how to execute on command and we take the output of command into variable .. this can be called as setfacts
+
+we will see the difference between shell and command modules
+ansible is a tool .. in any tool 100% automation is not available
+
+if ansible does not contains modules / collections for a particular task
+ansible gave us 2 options: use either command or shell module
+
+search -- ansible command module
+ansible.builtin.command
+
+command -- we can execute simple commands
+u cannot get complete shell environment of the remote server
+> , | will not work here
+we cannot access environment variables (like $HOME)
+faster as it avoids the overhead of invoking shell session
+
+
+search -- ansible shell module
+ansible.builtin.shell
+shell -- you will get the entire environment of the server
+> , | will work here
+standard shell variable expansion works as expected
+slightly slower due to the need  to start a shell process for execution
+
+ssh ec2-user@ip 'echo "hello" > /tmp/hello.txt'
+
+search -- ansible command vs shell
+
+to store the output of a command we can use register keyword
+
+ansible-command-vs-shell.yaml
+=============================
+- name: ansible command vs shell module
+  hosts: local
+  connection: local
+  tasks:
+  - name: command module test
+    #ansible.builtin.command: cat /etc/passwd | grep root
+    ansible.builtin.shell: cat /etc/passwd | grep root
+    register: users_output
+
+  - name: print output
+    ansible.builtin.debug:
+      msg: "{{ users_output }}"
+
+  - name: command module test
+    #ansible.builtin.command: cat /etc/passwd | grep root
+    ansible.builtin.shell: ls -ltr > files.txt
+    register: files_output
+
+//here we have redirected ls -ltr output to files.txt -- so output can't be printed on screen 
+
+we can just see the exit code as success -- rc - 0
+  
+command to execute -- ansible-playbook -i inventory.ini ansible-command-vs-shell.yaml
+
+in output -- stdout_line we can see output
+
+for simple commands we can use command module
+if command contains | , > then use shell module
+
+now we will see loops
+keyword for loops in ansible is loop
+while looping ansible treats each and every value as item while printing use keyword item .here item is reserved keyword
+
+for-loops.yaml
+==========
+- name: demo on loops
+  hosts: local
+  connection: local
+  tasks:
+  - name: print names
+    ansible.builtin.debug:
+      msg: "Hello {{ item }}" # item is reserved keyword
+    loop:
+    - Ramesh
+    - Raheem
+    - John
+
+command to execute -- ansible-playbook -i inventory.ini for-loops.yaml
+
+output 
+ok: [localhost] => (item=Ramesh) => {
+"msg" : "Hello Ramesh"
+}
+ok: [localhost] => (item=Raheem) => {
+"msg" : "Hello Raheem"
+}
+ok: [localhost] => (item=John) => {
+"msg" : "Hello John"
+}
+
+we will see installing packages using loops
+
+for-loops.yaml
+==============
+- name: install packages
+  hosts: local
+  connection: local
+  become: yes
+  tasks:
+  - name: install package
+    ansible.builtin.package:
+      name: "{{ item }}"
+      state: present
+    loop:  //datatype -- list of string
+    - mysql
+    - nginx
+    - zip
+
+command to execute -- ansible-playbook -i inventory.ini for-loops.yaml
+
+output
+
+now we will how to install some packages and how to remove some by using loops
+
+in below program , loop datatype is list and each entry in loop is map (contains key and value)
+overall datatype of loop is list of map
+
+for-loops.yaml
+==============
+- name: install packages
+  hosts: local
+  connection: local
+  become: yes
+  tasks:
+  - name: install package
+    ansible.builtin.package:
+      name: "{{ item.name }}"
+      state: "{{ item.state }}"
+    loop: # list of map
+    - { name: "mysql", state: "absent"} # map/dict
+    - { name: "nginx", state: "present"}
+    - { name: "zip", state: "present"}
+
+command to execute -- ansible-playbook -i inventory.ini for-loops.yaml
+
+next we will discuss about functions
+
+we use functions to perform a specific task by taking inputs
+there are no functions in ansible if we want functions we should write them in python
+in ansible we have to use builtin functions or filters
+we use filters for manipulation of data
+ 
+filters
+=======
+syntax: var_name | filter or function_name
+
+filters.yaml
+============
+- name: demo on filters
+  hosts: local
+  connection: local
+  tasks:
+  - name: greeting
+    ansible.builtin.debug:
+	msg: " hi Sivakumar , {{ GREETING | default('Good morning') }}"
+
+command to execute - ansible-playbook -i inventory.ini filter.yaml
+
+output
+msg: hi Sivakumar, Good morning
+
+in below program topics is -- string datatype
+by converting string to list we can benefit
+by using split filter we can convert string to list by delimiter ,
+for convertion from list to string , list to map we can use filters
+tagsMap is map/collection datatype, we want to convert it to list of map , for that use filter dict2items 
+tagsList datatype is list we want to convert it to map
+students.yaml file contains data in yaml , we want to convert it to json
+
+filters.yaml
+============
+
+- name: demo on filters
+  hosts: local
+  connection: local
+  vars:
+    topics: linux, shell, ansible, terraform  // datatype--string 
+    tagsMap:
+      name: ansible
+      project: roboshop
+      component: catalogue
+    tagsList: [
+        {
+            "key": "name",
+            "value": "ansible"
+        },
+        {
+            "key": "project",
+            "value": "roboshop"
+        },
+        {
+            "key": "component",
+            "value": "catalogue"
+        }
+    ]
+  tasks:
+  - name: greeting
+    ansible.builtin.debug:
+      msg: "Hi Sivakumar, {{ GREETING | default('Good Morning') }}"
+
+  - name: convert string to list
+    ansible.builtin.debug:
+      msg: "{{ topics | split(',') }}"
+
+  - name: convert map to list
+    ansible.builtin.debug:
+      msg: "{{ tagsMap | dict2items }}"
+
+  - name: convert list to map
+    ansible.builtin.debug:
+      msg: "{{ tagsList | items2dict }}"
+
+  - name: read students yaml
+    ansible.builtin.set_fact: # setting the variable dynamically
+      student_yaml: "{{ lookup('file', 'students.yaml' ) | from_yaml }}"
+
+  - name: convert YAML to JSON
+    ansible.builtin.debug:
+      msg: "{{ student_yaml | to_nice_json  }}"
+
+ 
+command to execute - ansible-playbook -i inventory.ini filters.yaml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

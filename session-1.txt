@@ -10,7 +10,7 @@ Testing
 Handover
 Maintainance
 
-Business and Technology -> reduce cost, stability, relaibility, increase business
+Business and Technology -> reduce cost, stability, reliability, increase business
 
 Business Analyst
 
@@ -20,13 +20,14 @@ Design the system
 Development
 Testing
 Deployment
-Maintainance and Monitoring
+Maintenance and Monitoring
 
 Waterfall vs Agile vs Agile with DevOps
 
 Yearly Health checks -> DEC 2026, max 50% chances -> Waterfall
 Monthly Health checks -> 80% chances to prevent -> Agile
-Apple watch -> DevOps -> Continous feedback
+
+Apple watch -> DevOps -> Continuous feedback
 
 Stakeholders -> Who is part of the system
 
@@ -78,7 +79,7 @@ student -> DAY-1
 99.9% pass
 
 if you test a system 1 time, you get 10 defects
-if you test a system 100 times, you get aleast 11 defects
+if you test a system 100 times, you get atleast 11 defects
 
 DEV, QA, SIT, UAT, PERF, PRE-PROD, PROD
 
@@ -155,8 +156,8 @@ IDBI -> 5% market share
 invest some amount on technology, reduce cost by moving from waterfall to devops, cloud
 
 
-DevOps is the process of  building, deploying and testing the applications continuosly. basically if we can deploy and test the code on the same day we can get maximum feedback cycles to improve our product...
-Ofcourse we use multiple tools to make this process smooth. continuos development, integration, deployment, delivery, testing, monitoring, application security etc part of devops
+DevOps is the process of  building, deploying and testing the applications continuously. basically if we can deploy and test the code on the same day we can get maximum feedback cycles to improve our product...
+Ofcourse we use multiple tools to make this process smooth. continuous development, integration, deployment, delivery, testing, monitoring, application security etc part of devops
 
 15th JULY -> AWS free tier is different
 6 months -> 100$ credits + 100$ credits

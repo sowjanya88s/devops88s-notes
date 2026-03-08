@@ -132,7 +132,6 @@ command for full details with helath check -- curl -v http://localhost:8080/heal
 payment application is developed by using python
  
 
-
 Python
 ============
 file extension -- .py
@@ -152,7 +151,7 @@ so lets setup rabbitmq database
 
 4) setup of rabbitmq database
 
-connect to rabbitmq db -- add rabbitmq repo 
+connect to rabbitmq server -- add rabbitmq repo 
 install rabbitmq-server package and then enable and start 
 add user and set password and give permissions for all queues
 rabbitmq opens 5672 port
@@ -167,10 +166,10 @@ create payment service and make changes in it -- change dependancies urls or hos
 then reload the daemon and then enable and start
 perform health check on backend components only
 
-now got fronten server and open nginx.conf file and change location of all backend components
+now goto frontend server and open nginx.conf file and change location of all backend components
 and then restart nginx
 
-open browser -- http://sowjanya.fine -- us hould see the application -- check all components whether they are working or not
+open browser -- http://sowjanya.fine -- u should see the application -- check all components whether they are working or not
 
 when problem occurs -- u should check
 frontend logs -> backend component logs -> DB is running fine or not

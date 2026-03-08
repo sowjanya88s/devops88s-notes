@@ -391,6 +391,69 @@ filters.yaml
  
 command to execute - ansible-playbook -i inventory.ini filters.yaml
 
+output
+[ root@ip-172-31-75-197 ~/ansible ]# ansible-playbook -i inventory.ini filter.yaml
+
+PLAY [passing variable value using filters] ******************************************************************************************************************
+
+TASK [Gathering Facts] ***************************************************************************************************************************************
+ok: [localhost]
+
+TASK [passing variable value using filters] ******************************************************************************************************************
+ok: [localhost] => {
+    "msg": " hi sowjanya, good morning"
+}
+
+TASK [converting string to list] *****************************************************************************************************************************
+ok: [localhost] => {
+    "msg": [
+        "sowjanya ",
+        " rishika ",
+        " mounika ",
+        " sita"
+    ]
+}
+
+TASK [converting map to dictionary] **************************************************************************************************************************
+ok: [localhost] => {
+    "msg": [
+        {
+            "key": "name",
+            "value": "ansible"
+        },
+        {
+            "key": "project",
+            "value": "roboshop"
+        },
+        {
+            "key": "component",
+            "value": "catalogue"
+        }
+    ]
+}
+
+TASK [converting list to map] ********************************************************************************************************************************
+ok: [localhost] => {
+    "msg": {
+        "component": "catalogue",
+        "name": "ansible",
+        "project": "roboshop"
+    }
+}
+
+TASK [setting the variable dynamically] **********************************************************************************************************************
+ok: [localhost]
+
+TASK [converting yaml to to_nice_json] ***********************************************************************************************************************
+ok: [localhost] => {
+    "msg": "\"<!-- Student list --> <Students> <!-- Student Object -->\\n<student> <FirstName>Ramesh</FirstName> <DOB>1999-01-01</DOB> <Email>info@joindevops.com</Email> <!-- Adress field --> <!-- <Address>104 gandhi apartments hyderabad</Address> --> <!-- Address object --> <!-- <Address> <FlatNumber>104</FlatNumber> <Street>Gandhi Nagar</Street> <City>Hyderabad</City> </Address> --> <Addresses> <PermAddress> <FlatNumber>104</FlatNumber> <Street>Gandhi Nagar</Street> <City>Hyderabad</City> </PermAddress> <CurrentAddress> <FlatNumber>104</FlatNumber> <Street>Gandhi Nagar</Street> <City>Hyderabad</City> </CurrentAddress> </Addresses> </student>\\n<student> <FirstName>Suresh</FirstName> <DOB>1999-01-01</DOB> <Email>info@joindevops.com</Email> <!-- <Address>104 gandhi apartments hyderabad</Address> --> <!-- <Address> <FlatNumber>104</FlatNumber> <Street>Gandhi Nagar</Street> <City>Hyderabad</City> </Address> --> <Addresses> <PermAddress> <FlatNumber>104</FlatNumber> <Street>Gandhi Nagar</Street> <City>Hyderabad</City> </PermAddress> <CurrentAddress> <FlatNumber>104</FlatNumber> <Street>Gandhi Nagar</Street> <City>Hyderabad</City> </CurrentAddress> </Addresses> </student> </Students>\""
+}
+
+PLAY RECAP ***************************************************************************************************************************************************
+localhost                  : ok=7    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0
+
+
+
 
 
 

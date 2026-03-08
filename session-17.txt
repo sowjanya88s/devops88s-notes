@@ -187,7 +187,7 @@ for every script we have to do --
 3. place colors
 4. place logs
 5. write validate function
-6.check exit status after evry command
+6.check exit status after every command
 
 vim editor is only for humans
 without opening file we can make changes by using

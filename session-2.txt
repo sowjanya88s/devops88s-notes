@@ -43,6 +43,8 @@ ssh-keygen -f daws-88s
 -> public key
 -> private key
 
+place public key in aws
+
 ssh-keygen -f daws-88s
 -> private key
 
@@ -69,6 +71,7 @@ Auto-pay enable by default, disable it in UPI
 Regions and Zones
 =================
 Hyderabad -> Zones east, west, north and south -> atleast 2 
+each region should contain atleast 2 az's
 
 Regions and Availability Zones(AZ)
 

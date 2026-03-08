@@ -1,3 +1,5 @@
+
+
 today we will place all the repetitive code in one file and by using that we will configure roboshop project again
 
 create one server and use aws configure command 

@@ -7,7 +7,7 @@ RDBMS -> relational database management server
 MySQL  , oracle, PostgreSQL, mssql comes under RDBMS
 the data will be in tables in these RDBMS databases
 there will be relations between tables by using primary key and foreign key
-if we place all data in one table while querying it will be difficult(maintainence issue)
+if we place all data in one table while querying it will be difficult(maintenance issue)
 for example 
 user table
 id name mobilenumber 
@@ -25,7 +25,7 @@ to connect to server we need a client package
 Usually command to connect mysql server is
 mysql -h <host-address> -u root -p<password>
 
-or u can simply give -- mysql because wr r in mysql-server only
+or u can simply give -- mysql because we r in mysql-server only
 
 But if your client and server both are in a single server, you can simply issue.
 mysql
@@ -68,7 +68,7 @@ dnf update -y openssh openssh-server openssh-clients
 now create system user 
 human accounts -- username and password
 non human accounts -- username exists without password
-by ruuning the application with the help of human account there is a chance of password leak by that hacking may happen
+by running the application with the help of human account there is a chance of password leak by that hacking may happen
 
 by running the application by using non human account there are no such chances 
 for this options like iam roles in aws & service accounts in k8s
@@ -136,7 +136,7 @@ loading path of nodejs --- command -- which node --- /bin/node or /usr/bin/node
 u can place the output of which node in exec start
 index.js starts the nodejs application and that is in /app folder
 
-in that we will mention db-private-ip (to connect with db application need db ip address and (username & pwd will be mentioned in code done by developers)) and index.json file location
+in that we will mention db-private-ip (to connect with db, application need db ip address and (username & pwd will be mentioned in code done by developers)) and index.json file location
 here all three servers (frontend ,backend , db servers) are in same network , by using private ip here application server can connect to db server fastly
 
 port(3306 by default) and username & password will be mentioned in dbconfig.js that is done by developers
@@ -174,6 +174,12 @@ now goto application server and start backend service and check whether it is st
 backend applications mostly opens 8080 port
 
 netstat -lntp -- 8080 opened by node -- u can see
+
+application health check
+curl http://<app-url>
+
+checkinga whether app can connect to db
+telnet <db-url> 3306 (<dp-ip>)
 
 
 

@@ -180,7 +180,7 @@ after this only we can do application deployment in server -- this process is kn
 to manage this configuration
 CRUD -- creation, reading , updating and deletion the configuration
 
-documnetation of for each and everthing is not possible
+documentation of for each and everything is not possible
 and even history command has some limitations
 
 so by doing everything using scripts is called config management as source code-- it will be saved in git history -- using shell is not easy
@@ -222,7 +222,7 @@ so agent is not required
 no need to open new ports & no  unnecessary traffic & no resource wastage 
 so everyone started using push based approach
 
-ansible server or contol ---> connects to ansible nodes
+ansible server or controller ---> connects to ansible nodes
 
 ansible installation
 =====================
@@ -284,10 +284,10 @@ branch
 denomination
 
 we have Markup languages
-================
+========================
 HTML (Hyper Text Markup Language), XML (Extensive Markup Language)
 
-when we place data in registaration form mark language take values like this sends to backend
+when we place data in registaration form markup language take values like this sends to backend
 <Register>
 	<Name>Sivakumar</Name>
 	<Mobile>12345678</Mobile>

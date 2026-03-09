@@ -1,0 +1,373 @@
+we will see some more filters
+create one instance and install ansible in it & clone git repo
+
+take one string
+course: "devops with aws"
+
+convert to upper case
+course | upper
+in above line course is the variable and upper is the filter
+
+covert to lower case
+course | lower
+in above line course is the variable and lower is the filter
+
+ip: "265.567.890.287"
+we can also check whether the given ip is proper ip or not
+ip | ansible.utils.ipv4
+in above line ip is ur ip and ansible.utils.ipv4 is the function to check whether the given ip is proper ipv4 or not
+by executing this it will throws an error -- failed to import the required python library (netaddr)
+
+build tool of python -- pip
+ansible uses python -- 
+check python version  in ansible
+ansible --version
+ansible python module location = /usr/lib/python3.9
+so we have to install pip 3.9 for this
+by installing this only it can check 
+command -- pip3.9 install netaddr
+now execute the script
+u can see the output as false
+
+filters.yaml
+============
+- name: demo on filters
+  hosts: local
+  connection: local
+  vars:
+   course: "DevOps with Ansible"
+    myIp: "192.23.89.123"
+  tasks:
+  - name: convert to upper case
+    ansible.builtin.debug:
+      msg: "{{ course | upper }}"
+
+  - name: convert to lower case
+    ansible.builtin.debug:
+      msg: "{{ course | lower }}"
+
+  - name: check ipv4
+    ansible.builtin.debug:
+      msg: "{{ myIp | ansible.utils.ipv4 }}"
+
+command to execute -- ansible-playbook -i inventory.ini filters.yaml
+
+now give proper ip --
+ip: "192.23.89.123"
+ip | ansible.utils.ipv4
+now execute the script
+u can see the output as 192.23.89.123
+these are the methods for filters
+
+now we wiil see error handling
+command to check whether a user exists or not -- id <user-name>
+take that command output to a variable and print the output
+bydefault ansible will not proceed if it faces any error
+but we have to handle the error which is expected
+search -- ansible error handling
+status code of the error -1
+so now we can create the user
+
+error-handling.yaml
+====================
+- name: demo on error handling
+  hosts: local
+  connection: local
+  become: yes
+  tasks:
+  - name: check user exist or not
+    ansible.builtin.command: id roboshop
+    register: user_ouput
+    ignore_errors: true //to ignore the error
+
+  - name: print the output
+    ansible.builtin.debug:
+      msg: "{{ user_ouput }}"
+
+  - name: create user  //creation of user when status is failure
+    ansible.builtin.command: useradd roboshop
+    when: user_ouput.rc != 0
+
+
+command to execute -- ansible-playbook -i inventory.ini error-handling.yaml
+
+if u use command module ansible does not acts as idempotent
+ansible acts as idempotent when u use collections
+
+check-idempotence.yaml
+======================
+- name: check idempotency
+  become: yes
+  hosts: local
+  connection: local
+  tasks:
+  - name: user creation
+    ansible.builtin.user:  //module for creation of user
+      name: johnd
+
+command to execute -- ansible-playbook -i inventory.ini check-idempotence.yaml
+
+when u execute this file for 1st time user will be created
+when u execute this file for 2nd time user will not be created
+
+if collection is available use collection only -- ansible acts as idempotent
+if collection is not available use command or shell module -- handle the error in ur way
+
+ansible bydefault starts with list
+playbook is list of plays
+u can write multiple plays inside a playbook
+playbook contains list of plays which contains list of tasks & we can execute against the remote server
+
+playbooks.yaml
+===============
+- name: Hello World
+  #hosts: web
+  hosts: local
+  connection: local
+  tasks:
+  - name: print hello World
+    ansible.builtin.debug:
+      msg: "Hello World!"
+
+- name: PLAY-2
+  hosts: local
+  connection: local
+  tasks:
+  - name: play-2 and task-1
+    ansible.builtin.debug:
+      msg: "Hello from PLAY-2 and TASK-1"
+
+command to execute -- ansible-playbook -i inventory.ini playbooks.yaml
+mostly we write one play inside one playbook
+
+now we will automate our project by using ansible
+
+create one repo -- roboshop-ansible
+clone the repo
+we will do all things using ansible
+for instance creation & R53 records we can ansible
+
+we can do this in windows servers also , there we should use rdpc  where as in linux we use ssh protocol
+
+roboshop using ansible
+=======================
+from now we will deal dev env seperately
+for dev create instances like this -- catalogue-dev.sowjanya.fun
+for qa create instances like this -- catalogue-qa.sowjanya.fun
+
+ansible can connect to outside env of instance also
+search -- ansible aws ec2 creation
+here u can find modules which came from amazon for ex: amazon.aws.ec2_instance
+
+if u don't want to use inventory file in yaml file u should mention hosts as all and while executing yaml file u should give -i localhost
+we will see that now
+
+what we do in console for creating instance those inputs we have to pass to create instance here too
+in amazon.aws.ec2_instance module mention sg_id , ami_id , instance_type 
+we want to create multiple instances -- give name of the instances in instances variable and use loop to iterate through it
+
+we thought creating instances for different environments --
+for that we should use multiple tags
+define variable like environment -- dev as value
+we can also mention tags for instances
+
+we can pick the output by using register keyword
+
+ansible developed based on python
+means while executing ansible playbooks , in background python code will be executed
+we can use console , cli , SDK to interact with AWS
+ansible provided some libraries for each and every programming languages
+while working with programming languages we have to use those SDK's
+for python -- SDK's -- botocore and boto3
+install botocore and boto3
+pip3.9 install botocore boto3
+
+set authentication
+aws configure
+give access key & secret access key & region name
+now u can see instances in ur aws console
+in output take json code and paste it in a file -- file name -- ec2_output.json
+in that u can see result list -- in that we can see list of 2 maps -- because we have created 2 instances
+to get instance id -- ec2_output.results[0].instance_ids
+to get private ip -- ec2_output.results[0].instances.private_ip_address
+to get public ip -- ec2_output.results[0].instances.public_ip_address
+
+now we will see creation of R53 records
+search -- ansible aws route53
+for that we need domain-name , ip
+put domain_name in a variable
+for ip we need to loop through output of instance create module i.e ec2_output.results -- this the list
+in that we can get ansible_loop_var : item -- in that item -- mongodb
+ec2_output.results -- item.item -- mongodb
+
+private ip address -- ec2_output.results.item.instances[0].private_ip_address
+by that a record will be craeted with private ip address
+
+goto R53 -- hosted zone -- u can see A records for mongodb & catalogue
+as -- mongodb-dev.sowjanya.fun , catalogue-dev.sowjanya.fun
+
+when item.item == frontend
+create route53 record with public ip & record as roboshop-dev.sowjanya.fun
+
+if u run this for 2nd time -- ansible works with idempotence
+
+now we will see creation of inventory file -- 
+inventory.ini
+=============
+[mongodb]
+mongodb-dev.daws88s.online
+
+[catalogue]
+catalogue-dev.daws88s.online
+
+[all:vars]
+ansible_user=ec2-user
+ansible_password=DevOps321
+
+by this inventory , u have mentioned two hosts they are mongodb & catalogue
+whenever u try to connect to those hosts -- below mentioned username & password will be used
+or if u want to override them u can override
+
+
+create-instances.yaml
+=====================
+- name: create ec2 and r53 records
+  hosts: all
+  connection: local
+  vars:
+    sg_id: sg-076ec9ad23dab2b28
+    ami_id: ami-0220d79f3f480ecf5
+    domain_name: daws88s.online
+    env: dev
+    action: create
+    instances:
+    - mongodb
+    - catalogue
+  tasks:
+  ### CREATE ###
+  - name: create ec2 instance
+    amazon.aws.ec2_instance:
+      instance_type: "t3.micro"
+      security_group: "{{ sg_id }}"
+      image_id: "{{ ami_id }}"
+      name: "{{ item }}-{{ env }}"
+      tags:
+        Project: roboshop
+        Component: "{{ item }}"
+        Environment: "{{ env }}"
+        Name: "{{ item }}-{{ env }}"
+    loop: "{{ instances }}"
+    register: ec2_output
+    when: action == "create"
+
+  - name: print the output
+    ansible.builtin.debug:
+      msg: "{{ ec2_output }}"
+    when: action == "create"
+
+  - name: create r53 records
+    amazon.aws.route53:
+      state: present
+      zone: "{{ domain_name }}"
+      record: "{{ item.item }}-{{ env }}.{{ domain_name }}" # mongodb-dev.daws88s.online, frontend-dev.daws88s.online
+      type: A
+      ttl: 1
+      value: "{{ item.instances[0].private_ip_address }}"
+      wait: false
+      overwrite: true
+    loop: "{{ ec2_output.results }}" # list
+    when: action == "create"
+
+  - name: create r53 record for frontend
+    amazon.aws.route53:
+      state: present
+      zone: "{{ domain_name }}"
+      record: "roboshop-{{ env }}.{{ domain_name }}" # roboshop-dev.daws88s.online
+      type: A
+      ttl: 1
+      value: "{{ item.instances[0].public_ip_address }}"
+      wait: false
+      overwrite: true
+    loop: "{{ ec2_output.results }}"
+    when:  # and
+    - item.item == "frontend"
+    - action == "create"
+
+  ### DESTROY ###
+  - name: delete r53 records for frontend
+    amazon.aws.route53:
+      state: absent
+      zone: "{{ domain_name }}"
+      record: "roboshop-{{ env }}.{{ domain_name }}" # roboshop-dev.daws88s.online
+      type: A
+      ttl: 1
+    loop: "{{ instances }}"
+    when:  # and
+    - item == "frontend"
+    - action == "destroy"
+
+  - name: delete r53 records
+    amazon.aws.route53:
+      state: absent
+      zone: "{{ domain_name }}"
+      record: "{{ item }}-{{ env }}.{{ domain_name }}" # roboshop-dev.daws88s.online
+      type: A
+      ttl: 1
+    loop: "{{ instances }}"
+    when: action == "destroy"
+
+  - name: delete ec2 instance
+    amazon.aws.ec2_instance:
+      state: absent
+      name: "{{ item }}-{{ env }}"
+      wait: false
+    loop: "{{ instances }}"
+    when: action == "destroy"
+
+
+command to execute -- ansible-playbook -i localhost, roboshop.yaml
+
+
+now lets see creation of config file of mongodb
+copy mongo.repo into ansible-roboshop folder
+
+in that we have to copy mongodb repo 
+for that use ansible.builtin.copy module of ansible
+this module takes source and destination & permissions inputs to it   -- 1 hr
+
+
+mongodb.yaml
+============
+- name: mongodb configure
+  hosts: mongodb
+  become: yes
+  tasks:
+  - name: copy mongo repo
+    ansible.builtin.copy:
+      src: mongo.repo
+      dest: /etc/yum.repos.d/mongo.repo
+
+  - name: install mongodb server
+    ansible.builtin.dnf:
+      name: mongodb-org
+      state: present
+  
+  - name: allow remote connections
+    ansible.builtin.replace:
+      path: /etc/mongod.conf
+      regexp: '127.0.0.1'
+      replace: '0.0.0.0'
+
+  - name: start and enable mongodb
+    ansible.builtin.service:
+      name: mongod
+      enabled: yes
+      state: started
+
+  # - name: restart mongodb
+  #   ansible.builtin.service:
+  #     name: mongod
+  #     state: restarted
+
+
+

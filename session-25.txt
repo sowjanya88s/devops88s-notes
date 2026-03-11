@@ -1,0 +1,311 @@
+when u don't give action , bydefault it takes as create
+when u place wait: false it will destroys the instances fastly
+otherwise destroying the instance takes atleast one minute and we should wait till then
+
+
+create instance & connect to it
+aws configure
+give access key & secret access key
+yum install ansible -y
+pip3.9 install boto3 botocore (SDK of python -- by installing these only python can connect to AWS API)
+to create all instances using create-instances.sh script 
+we should give names of instances on command line like below
+ansible-playbook -i localhost, -e  '{"instances=["mongodb" , "catalogue" , "redis" , "user" , "cart" , "mysql" ,"rabbitmq" , "shipping" , "payment"]"}' create-instances.yaml
+now all instances will be created & R53 -- A records will be created
+
+yesterday we have done upto code unzip
+now we have to install dependancies of nodejs i.e npm for that use community.general.npm and specify the path of /app
+for that use community module (ansible module is not available)
+copy catalogue.service file into /etc/systemd/system and change the url of mongodb in service file
+for copying use ansible.builtin.copy module
+and then we have to enable and start catalogue , this fails if we don't load the data into mongodb
+to load data into mongodb -- install mongodb client in catalogue server
+copy mongo repo into catalogue server by using ansible.builtin.copy module
+and then install mongodb-mongo
+before loading data into mongodb -- first check data is available in mongodb 
+for that we have used one command in shell , take that command
+mention mongodb_host as variable in inventory file then we can get access anywhere in entire folder (i.e ansible-roboshop)
+and take that output into a variable
+if the variable contains negative value -- schema does not exist
+if the variable contains positive value -- schema exists , so load the products
+while loading schema into db, write condition output of variable is -ve value
+
+to run any application, we should install those application dependancies (install prog language , create system user , create directory , download the application code , unzip the code in new directory , install dependancies , if needed load the data into db)
+
+
+script -- pseudo code
+======================
+action = create
+passing the instances names in list
+1. create instances, loop instance names. item is the keyword
+	register the output in variable -> ec2_output
+	
+	ec2_output.results -> output as list
+	
+2. loop  -- output of  ec2_output.results -- is in  list of map
+	item -> first map
+	
+	{{ item.item }} => 1st element access => name
+	{{ item.instances[0].private_ip_address }}
+	
+ name-of-instance or frontend-dev.daws88s.online -> private_ip_address
+	
+	roboshop-dev.daws88s.online -> public_ip_address
+	loop: ec2_output.results
+	when: 
+	- item.item == "frontend"
+	- action == "create"
+
+now run playbook for mongodb
+command to execute -- ansible-playbook -i inventory.ini mongodb.yaml
+
+lets see catalogue
+command to execute -- ansible-playbook -i inventory.ini catalogue.yaml
+
+
+- name: load the products
+    ansible.builtin.shell: mongosh --host "{{ MONGODB_HOST }}" </app/db/master-data.js
+    when: catalogue_output.stdout < 0
+
+in output we can see "stdout" : "-1"
+
+stdout -- datatype -- string 
+error: unexpected templating type error
+we have to save integer value into the variable -- catalogue_output.stdout
+we r comparing the string value with integer
+so its throwing type error
+
+we have to convert string to integer , for that use below command 
+
+catalogue_output.stdout | int -- converts "-1" (string) -- -1 (integer)
+
+- name: load the products
+    ansible.builtin.shell: mongosh --host "{{ MONGODB_HOST }}" </app/db/master-data.js
+    when: catalogue_output.stdout | int < 0
+
+now products will be loaded
+if u run the script again -- stdout value will be 1
+because products are loaded
+after loading the products we need to start catalogue service
+
+perform health check
+command -- curl http://localhost:8080/health
+catalogue runs on 8080
+
+if developer has made changes in code -- pushed the new code to git
+here can it download the new code
+so alter the code -- before downloading the code -- remove existing code for safe side
+means we will delete the /app directory & /tmp/catalogue.zip also before downloading code
+
+restarting the application -- is safest option
+
+next we will see the config of redis 
+
+mention redis domain name in inventory also
+
+redis.yaml
+===========
+- name: configure redis server
+  become: yes
+  hosts: redis
+  tasks:
+  - name: enable redis 7
+    ansible.builtin.command: dnf module enable redis:7 -y
+
+  - name: install redis
+    ansible.builtin.dnf:
+      name: redis 
+      state: present
+
+  - name: allow remote connections
+    ansible.builtin.replace:   #used for replacing word
+      path: /etc/redis/redis.conf
+      regexp: '127.0.0.1'
+      replace: '0.0.0.0'
+
+  - name: disable protected mode
+    ansible.builtin.lineinfile:  #used for replacing line in file
+      path: /etc/redis/redis.conf
+      regexp: 'protected-mode'
+      line: 'protected-mode no'
+
+  - name: start and enable redis
+    ansible.builtin.service: 
+      name: redis
+      state: restarted
+      enabled: yes
+
+command to execute -- ansible-playbook -i inventory.ini redis.yaml
+check redis is running or not
+redis runs on port number 6379
+
+lets configure user
+copy user.service file to roboshop-ansible
+and replace redis ip  & mongodb ip with redis_host & mongodb host in file
+mention redis_host , user_host in inventory 
+user & cart are same as catalogue -- u can just replace the name 
+
+user.yaml
+=========
+- name: configure user
+  hosts: user
+  become: yes
+  tasks:
+  - name: enable nodejs 20
+    ansible.builtin.command: dnf module enable nodejs:20 -y
+
+  - name: install nodejs
+    ansible.builtin.dnf:
+      name: nodejs
+      state: present
+
+  - name: create system user roboshop
+    ansible.builtin.user:
+      name: roboshop
+      system: true
+      home: /app
+      shell: /sbin/nologin
+      comment: "Roboshop system user"
+  
+  - name: delete app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+
+  - name: create app directory
+    ansible.builtin.file:
+      path: /app
+      state: directory
+
+  - name: delete user zip file
+    ansible.builtin.file:
+      path: /tmp/user.zip
+      state: absent
+
+  - name: download user
+    ansible.builtin.get_url:
+      url: https://roboshop-artifacts.s3.amazonaws.com/user-v3.zip 
+      dest: /tmp/user.zip
+
+  - name: unarchieve user
+    ansible.builtin.unarchive:
+      src: /tmp/user.zip
+      dest: /app
+      remote_src: yes
+
+  - name: install dependencies
+    community.general.npm:
+      path: /app
+
+  - name: copy user service
+    ansible.builtin.template:
+      src: user.service
+      dest: /etc/systemd/system/user.service
+
+  - name: daemon reload
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: start user
+    ansible.builtin.service:
+      name: user
+      state: restarted
+      enabled: yes
+
+command to execute -- ansible-playbook -i inventory.ini user.yaml
+check user is running or not
+user runs on port 8080
+
+
+next we will see cart
+copy cart.service file to roboshop-ansible
+and replace cart ip  & mongodb ip with cart_host & mongodb host in file
+mention cart_host in inventory 
+
+cart.yaml
+=========
+- name: configure cart
+  hosts: cart
+  become: yes
+  tasks:
+  - name: enable nodejs 20
+    ansible.builtin.command: dnf module enable nodejs:20 -y
+
+  - name: install nodejs
+    ansible.builtin.dnf:
+      name: nodejs
+      state: present
+
+  - name: create system user roboshop
+    ansible.builtin.user:
+      name: roboshop
+      system: true
+      home: /app
+      shell: /sbin/nologin
+      comment: "Roboshop system user"
+  
+  - name: delete app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+
+  - name: create app directory
+    ansible.builtin.file:
+      path: /app
+      state: directory
+
+  - name: delete cart zip file
+    ansible.builtin.file:
+      path: /tmp/cart.zip
+      state: absent
+
+  - name: download cart
+    ansible.builtin.get_url:
+      url: https://roboshop-artifacts.s3.amazonaws.com/cart-v3.zip 
+      dest: /tmp/cart.zip
+
+  - name: unarchieve cart
+    ansible.builtin.unarchive:
+      src: /tmp/cart.zip
+      dest: /app
+      remote_src: yes
+
+  - name: install dependencies
+    community.general.npm:
+      path: /app
+
+  - name: copy cart service
+    ansible.builtin.template: #after making changes do daemon-reload
+      src: cart.service
+      dest: /etc/systemd/system/cart.service
+  
+  - name: daemon reload
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: start cart
+    ansible.builtin.service:
+      name: cart
+      state: restarted
+      enabled: yes
+
+command to execute -- ansible-playbook -i inventory.ini cart.yaml
+check cart is running or not
+cart runs on port 8080
+note: in roboshop application , applications running on nodejs runs on port 8080
+
+use template module instead of copy module
+template module replaces the variables
+copy module just copies the file as it is
+{{ variable-name }} --this format is called jinja2 formatting
+by this notation , it checks in all places for variables and replaces the variable by its value
+
+
+
+
+
+
+
+	
+
+	 

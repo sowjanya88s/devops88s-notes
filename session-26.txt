@@ -1,0 +1,264 @@
+command to create multiple instances -- 
+ansible-playbook -i localhost, -e "instances=['mongodb','catalogue','redis','user','cart']" instances.yaml
+
+because we have mentioned  hosts: all , connection: local in instances.yaml file
+by giving inventory.ini on command line while creating instances -- this program will create multiple instances for each & every component
+this is why ansible is not suitable for infra creation
+
+while creating instances , r53 records don't use wait:false
+
+u can config all the components by using ansible server only
+
+now lets see config of mysql
+
+mysql.yaml
+==========
+- name: configure mysql server
+  hosts: mysql
+  become: yes
+  tasks:
+  - name: install MySQL server
+    ansible.builtin.dnf:
+      name: mysql-server
+      state: present
+
+  - name: start and enable mysql server
+    ansible.builtin.service:
+      name: mysqld
+      state: restarted
+      enabled: yes
+
+  - name: setup root password
+    ansible.builtin.command: mysql_secure_installation --set-root-pass RoboShop@1 
+
+
+now lets see config of shipping
+copy shipping.service to ansible-roboshop
+and replace cart_host & mysql_host in service file
+install dependancies
+use loop to install mysql & maven
+next we have to connect to mysql DB & we have to load the data into mysqldb
+general command to connect to MySQL db -- MySQL -h <host-ip> -u root -p <pwd> < /file/path.sql
+here we have to check products are already loaded or not by using command
+search: ansible mysql module   
+check MySQL db module
+use loop to load 3 files into MySQL      
+
+shipping.yaml
+==============
+- name: configure shipping server
+  hosts: shipping
+  become: yes
+  tasks:
+  - name: install maven and mysql
+    ansible.builtin.dnf:
+      name: "{{ item }}"
+      state: present
+    loop:
+    - maven
+    - mysql
+
+  - name: create system user roboshop
+    ansible.builtin.user:
+      name: roboshop
+      system: true
+      home: /app
+      shell: /sbin/nologin
+      comment: "Roboshop system user"
+  
+  - name: delete app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+
+  - name: create app directory
+    ansible.builtin.file:
+      path: /app
+      state: directory
+
+  - name: delete shipping zip file
+    ansible.builtin.file:
+      path: /tmp/shipping.zip
+      state: absent
+
+  - name: download shipping
+    ansible.builtin.get_url:
+      url: https://roboshop-artifacts.s3.amazonaws.com/shipping-v3.zip 
+      dest: /tmp/shipping.zip
+
+  - name: unarchieve shipping
+    ansible.builtin.unarchive:
+      src: /tmp/shipping.zip
+      dest: /app
+      remote_src: yes
+  
+  - name: install dependencies
+    ansible.builtin.command: mvn clean package
+    args:         #to run command in /app
+      chdir: /app
+
+  - name: renaming dependencies
+    ansible.builtin.command: mv target/shipping-1.0.jar shipping.jar 
+    args:        #to run command in /app
+      chdir: /app
+
+  - name: create systemctl service
+    ansible.builtin.template:
+      src: shipping.service
+      dest: /etc/systemd/system/shipping.service
+
+  - name: daemon reload
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: install dependencies
+    ansible.builtin.pip:
+      name: "{{ item }}"
+      executable: pip3.9
+    loop:
+    - cryptography
+    - PyMySQL
+
+  - name: import shipping data
+    community.mysql.mysql_db:
+      state: import
+      name: all
+      login_host: "{{ MYSQL_HOST }}"
+      login_user: root
+      login_password: RoboShop@1
+      target: "{{ item }}"
+    loop:
+    - /app/db/schema.sql
+    - /app/db/app-user.sql 
+    - /app/db/master-data.sql
+
+  - name: start and enable shipping
+    ansible.builtin.service:
+      name: shipping
+      state: restarted
+      enabled: yes
+command to execute -- ansible-playbook -i inventory.ini shipping.yaml
+
+command to do health check in ansible server -- curl http://catalogue-dev.sowjanya.fun:8080/health
+
+command to check telnet in ansible server --
+telnet reis-dev.sowjanya.fun 6379
+
+next we will see config of rabbitmq
+check module in google to create username & password & permissions for rabbitmq
+
+rabbitmq.yaml
+=============
+- name: configure rabbitmq server
+  hosts: rabbitmq
+  become: yes
+  tasks:
+  - name: copy rabbitmq repo
+    ansible.builtin.copy:
+      src: rabbitmq.repo
+      dest: /etc/yum.repos.d/rabbitmq.repo
+
+  - name: install rabbitmq server
+    ansible.builtin.dnf:
+      name: rabbitmq-server
+      state: present
+
+  - name: start and enable rabbitmq
+    ansible.builtin.service:
+      state: restarted
+      enabled: yes
+      name: rabbitmq-server
+
+  - name: create rabbitmq user
+    community.rabbitmq.rabbitmq_user:
+      user: roboshop 
+      password: roboshop123
+      permissions:
+        - vhost: /
+          configure_priv: .*
+          read_priv: .*
+          write_priv: .*
+      state: present
+
+command to execute -- ansible-playbook -i inventory.ini rabbitmq.yaml
+  
+next we will see config of payment
+copy payment.service to roboshop-ansible directory
+while installing dependancies u should mention path
+
+
+payment.yaml
+============
+- name: configure payment server
+  hosts: payment
+  become: yes
+  tasks:
+  - name: install python
+    ansible.builtin.dnf:
+      name: "{{ item }}"
+      state: present
+    loop:
+    - python3 
+    - gcc 
+    - python3-devel
+
+  - name: create system user roboshop
+    ansible.builtin.user:
+      name: roboshop
+      system: true
+      home: /app
+      shell: /sbin/nologin
+      comment: "Roboshop system user"
+  
+  - name: delete app directory
+    ansible.builtin.file:
+      path: /app
+      state: absent
+
+  - name: create app directory
+    ansible.builtin.file:
+      path: /app
+      state: directory
+
+  - name: delete payment zip file
+    ansible.builtin.file:
+      path: /tmp/payment.zip
+      state: absent
+
+  - name: download payment
+    ansible.builtin.get_url:
+      url: https://roboshop-artifacts.s3.amazonaws.com/payment-v3.zip 
+      dest: /tmp/payment.zip
+
+  - name: unarchieve payment
+    ansible.builtin.unarchive:
+      src: /tmp/payment.zip
+      dest: /app
+      remote_src: yes
+
+  - name: install dependencie
+    ansible.builtin.pip:
+      requirements: requirements.txt
+      executable: pip3.9
+    args:
+      chdir: /app
+
+  - name: copy payment service
+    ansible.builtin.template:
+      src: payment.service
+      dest: /etc/systemd/system/payment.service
+
+  - name: daemon reload
+    ansible.builtin.systemd_service:
+      daemon_reload: true
+
+  - name: start enable payment
+    ansible.builtin.service:
+      name: payment
+      state: restarted
+      enabled: yes
+
+command to execute -- ansible-playbook -i inventory.ini payment.yaml
+
+
+

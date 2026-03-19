@@ -1,0 +1,285 @@
+to run user component in background
+command -- nohup ansible-playbook -e component=user roboshop.yaml &
+by giving only & it executes only one commad in background
+remaining commands output will be printed on screen only
+by giving nohup entire procedure will be executed in tha background
+nohup output will be saved at nohup.out file
+
+create instances & configure mongodb , catalogue , redis , user , cart, mysql
+
+let see config of shipping
+
+create shipping directory in roles
+
+roles -- shipping -- tasks -- main.yaml
+app-setup is common for all components
+create java-setup.yaml file in common folder
+in java setup we should write maven & mysq installation , installing java dependancies , and renaming jar file
+import java-setup by using import role
+systemd-setup is common which includes copying service file & starting service
+now we should load mysql products & restart shipping service
+
+shipping -- tasks -- main.yaml
+==============================
+- name: app setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: app-setup.yaml
+
+- name: python setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: python-setup.yaml
+
+- name: systemd setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: systemd-setup.yaml
+
+- name: restart payment
+  ansible.builtin.service:
+    name: payment
+    state: restarted
+    enabled: yes
+
+shipping -- meta -- main.yaml
+==============================
+dependencies:
+- role: common
+
+
+common -- tasks -- java-setup.yaml
+==================================
+- name: install maven and mysql
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+  - maven
+  - mysql
+
+- name: install dependencies
+  ansible.builtin.command: mvn clean package
+  args:
+    chdir: /app
+
+- name: rename jar file
+  ansible.builtin.command: mv target/shipping-1.0.jar shipping.jar 
+  args:
+    chdir: /app
+
+copy shipping.service file into -- 
+shipping -- templates -- shipping.service.j2
+
+command to execute -- ansible-playbook -e component=shipping roboshop.yaml
+
+frontend component depends on all other components
+in frontend -- meta -- roles -- mention all components -- by that by executing frontend all other components will be executed automatically (this is very tight)
+
+handlers -- is a directory
+handlers/notifiers -- we can restart services by using handlers
+
+handlers are notifiers, u can call task-b when task-a changes. 
+for ex: when a configuration changes, u can restart the application by using handlers
+by using notify keyword we can trigger handlers
+
+if we made changes in service file then only we should restart service file & along with that we will do daemon-reload
+don't do restarts without any purpose
+because by restarting  application  it needs downtime (max -- 5)
+playbook is idempotent -- running playbook for multiple times -- not good
+
+lets see config of payment
+
+create payment repo in roles
+roles -- payment -- tasks -- main.yaml
+payment -- meta -- main.yaml
+templates -- payment.service.j2
+common -- tasks -- python-setup.yaml
+in python-setup -- installing python , installing dependancies of python
+main.yaml in payment contains importing shipping data into mysql 
+roles -- payment -- tasks -- main.yaml
+======================================
+- name: app setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: app-setup.yaml
+
+- name: java setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: java-setup.yaml
+
+- name: systemd setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: systemd-setup.yaml
+
+- name: install python dependencie
+  ansible.builtin.pip:
+    name: "{{ item }}"
+    executable: pip3.9
+  loop:
+  - cryptography
+  - PyMySQL
+
+- name: import shipping data
+  community.mysql.mysql_db:
+    state: import
+    name: all
+    login_host: "{{ MYSQL_HOST }}"
+    login_user: root
+    login_password: RoboShop@1
+    target: "{{ item }}"
+  loop:
+  - /app/db/schema.sql
+  - /app/db/app-user.sql 
+  - /app/db/master-data.sql
+
+- name: start and enable shipping
+  ansible.builtin.service:
+    name: shipping
+    state: restarted
+    enabled: yes
+
+
+payment -- meta -- main.yaml
+=============================
+dependencies:
+- role: common
+
+templates -- payment.service.j2
+===============================
+copy payment.service here 
+
+common -- tasks -- pyton-setup.yaml
+===================================
+- name: install python
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop:
+  - python3 
+  - gcc 
+  - python3-devel
+
+- name: install dependencie
+  ansible.builtin.pip:
+    requirements: requirements.txt
+    executable: pip3.9
+  args:
+    chdir: /app
+
+to save log at /var/log/ansible.log 
+use this command -- nohup ansible-playbook -e component=mysql roboshop.yaml &> /var/log/ansible.log
+
+to see deailed log of ansible -- ansible-playbook -vv -e component=mysql roboshop.yaml 
+to see detailed log with shell commands also -- ansible-playbook -vvv -e component=mysql roboshop.yaml 
+create nginx repo in roles
+roles -- nginx -- tasks -- main.yaml
+nginx -- handlers -- main.yaml
+templates -- nginx.service.j2
+
+nginx -- handlers -- main.yaml
+===============================
+- name: resatrt nginx
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+    enabled: yes
+
+nginx -- tasks -- main.yaml
+===========================
+- name: enable nginx 1.24
+  ansible.builtin.command: dnf module enable nginx:1.24 -y
+
+- name: install nginx
+  ansible.builtin.dnf:
+    name: nginx
+    state: present
+
+- name: Remove the entire directory
+  ansible.builtin.file:
+    path: /usr/share/nginx/html
+    state: absent
+
+- name: create html directory
+  ansible.builtin.file:
+    path: /usr/share/nginx/html
+    state: directory
+
+- name: download frontend
+  ansible.builtin.get_url:
+    url: https://roboshop-artifacts.s3.amazonaws.com/frontend-v3.zip 
+    dest: /tmp/frontend.zip
+
+- name: unarchieve frontend
+  ansible.builtin.unarchive:
+    src: /tmp/frontend.zip
+    dest: /usr/share/nginx/html
+    remote_src: yes
+
+- name: remove default nginx
+  ansible.builtin.file:
+    state: absent
+    path: /etc/nginx/nginx.conf
+
+- name: copy nginx.conf
+  throttle: 2
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+  notify: resatrt nginx
+
+
+nginx -- templates -- nginx.service.j2
+======================================
+place nginx.conf code here
+
+in the end u can see running handler
+command to execute -- ansible-playbook -e component=frontend roboshop.yaml
+
+if u run this playbook for 2nd time nginx will be restarted because we r removing nginx.conf and copying nginx.conf again
+
+tags
+====
+if u want to run only a specific tag to run inside a playbook u can use ansible tags
+
+whenever we release a version --
+
+deployment 
+===========
+1.remove old code & download the new code & unzip the new code 
+2.copy new code
+3.install dependancies
+4. restart the server
+the code related to above tasks is in app-setup.yaml
+
+in import-role of app setup module use tags keyword and give tag name to it as deployment
+for ex:
+tags:
+- deployment
+
+
+tags: 
+  - deployment
+  #ansible.builtin.import_role:
+  ansible.builtin.include_role:
+
+to include role in nodejs-setup -- in installing dependancies section also
+u should mention tags 
+
+tags:
+-deployment
+ 
+
+
+to run the deployment tag related module
+command -- ansible-playbook -e component=catalogue -t deployment roboshop.yaml
+ 
+there is one more thing -- include-role
+include-role -- way of calling other roles
+
+import_role respects the tags. if u apply tags to import_role those will be automatically applied to all the tasks inside that role
+
+include role does not respect tags
+

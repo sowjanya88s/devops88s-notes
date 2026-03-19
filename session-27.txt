@@ -1,0 +1,864 @@
+ while doing ansible
+we will have code and configuration
+the code is same for all environments
+and we can test the code in all possible ways
+configuration -- 2 types -- 
+confidential -- URL's  , variables
+not confidential -- username & password
+these config will be changed based on environment
+
+next we will see config of nginx
+
+nginx.yaml
+==========
+- name: configure frontend server
+  hosts: frontend
+  become: yes
+  tasks:
+  - name: enable nginx 1.24
+    ansible.builtin.command: dnf module enable nginx:1.24 -y
+
+  - name: install nginx
+    ansible.builtin.dnf:
+      name: nginx
+      state: present
+
+  - name: Remove the entire directory
+    ansible.builtin.file:
+      path: /usr/share/nginx/html
+      state: absent
+
+  - name: create html directory
+    ansible.builtin.file:
+      path: /usr/share/nginx/html
+      state: directory
+
+  - name: download frontend
+    ansible.builtin.get_url:
+      url: https://roboshop-artifacts.s3.amazonaws.com/frontend-v3.zip 
+      dest: /tmp/frontend.zip
+
+  - name: unarchieve frontend
+    ansible.builtin.unarchive:
+      src: /tmp/frontend.zip
+      dest: /usr/share/nginx/html
+      remote_src: yes
+
+  - name: remove default nginx
+    ansible.builtin.file:
+      state: absent
+      path: /etc/nginx/nginx.conf
+
+  - name: copy nginx.conf
+    ansible.builtin.template:
+      src: nginx.conf
+      dest: /etc/nginx/nginx.conf
+
+  - name: resatrt nginx
+    ansible.builtin.service:
+      name: nginx
+      state: restarted
+      enabled: yes
+
+command to execute -- ansible-playbook -i inventory.ini nginx.yaml
+
+remove default ngnix & paste below content & make changes to it accordig to u
+  
+nginx.conf
+==========
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log notice;
+pid /run/nginx.pid;
+
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile            on;
+    tcp_nopush          on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+
+    include /etc/nginx/conf.d/*.conf;
+
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  _;
+        root         /usr/share/nginx/html;
+
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+
+        location /images/ {
+          expires 5s;
+          root   /usr/share/nginx/html;
+          try_files $uri /images/placeholder.jpg;
+        }
+        location /api/catalogue/ { proxy_pass http://{{ CATALOGUE_HOST }}:8080/; }
+        location /api/user/ { proxy_pass http://{{ USER_HOST }}:8080/; }
+        location /api/cart/ { proxy_pass http://{{ CART_HOST }}:8080/; }
+        location /api/shipping/ { proxy_pass http://{{ SHIPPING_HOST }}:8080/; }
+        location /api/payment/ { proxy_pass http://{{ PAYMENT_HOST }}:8080/; }
+
+        location /health {
+          stub_status on;
+          access_log off;
+        }
+
+    }
+}
+
+
+inventory.ini
+=============
+[mongodb]
+mongodb-dev.daws88s.online
+
+[catalogue]
+catalogue-dev.daws88s.online
+
+[redis]
+redis-dev.daws88s.online
+
+[user]
+user-dev.daws88s.online
+
+[cart]
+cart-dev.daws88s.online
+
+[mysql]
+mysql-dev.daws88s.online
+
+[shipping]
+shipping-dev.daws88s.online
+
+[rabbitmq]
+rabbitmq-dev.daws88s.online
+
+[payment]
+payment-dev.daws88s.online
+
+[frontend]
+frontend-dev.daws88s.online
+
+[all:vars]
+ansible_user=ec2-user
+ansible_password=DevOps321
+MONGODB_HOST=mongodb-dev.daws88s.online
+CATALOGUE_HOST=catalogue-dev.daws88s.online
+REDIS_HOST=redis-dev.daws88s.online
+USER_HOST=user-dev.daws88s.online
+CART_HOST=cart-dev.daws88s.online
+MYSQL_HOST=mysql-dev.daws88s.online
+SHIPPING_HOST=shipping-dev.daws88s.online
+RABBITMQ_HOST=rabbitmq-dev.daws88s.online
+PAYMENT_HOST=payment-dev.daws88s.online
+
+open browser -- http://roboshop-dev.sowjanya.fun -- verify all modules are working properly or not
+
+disadvantages:
+===============
+1. DRY(don't repeat urself)
+code reuse is a basic feature
+
+code reuse & proper error handling are the basic features needed for programming language
+
+search -- ansible code reuse -- ansible-roles
+role -- proper directory structure of creating and managing and reusing playbooks. we can break down playbook into multiple components
+like tasks, handlers, vars, meta, templates, files etc, by default ansible loads main.yaml in these directories
+
+upto now we have mentioned all tasks in one playbook
+
+now create one repo in github -- ansible-roles-roboshop
+
+clone the repo to local
+
+open that repo in vsc -- in that create one file -- main.yaml
+
+main.yaml
+=========
+---
+- name: roles demo
+  hosts: local
+  connection: local
+  roles:
+  - demo
+
+by this ansible checks for roles
+
+now create one repo with name roles in ansible-roles-roboshop
+
+ansible-roles-roboshop --> roles --> demo --> tasks --> main.yaml
+
+main.yaml
+=========
+- name: Hello world
+  ansible.builtin.debug:
+    msg: "Hi from Roles"
+
+
+create inventory.ini in ansible-roles-roboshop
+
+inventory.ini
+=============
+[local]
+localhost
+
+now create instances -- 
+ansible-playbook -i localhost, -e "instances=['mongodb','catalogue','redis','mysql','user','cart']" roboshop.yaml
+
+lets see ansible configuration
+we can write our own config file instaed of using default ones
+
+command to see default config file location --
+ansible --version
+config file = /etc/ansible/ansible.cfg
+
+we can give ansible config in 4 types
+1) ANSIBLE_CONFIG variable
+2) ansible.cfg variable in pwd
+3) user home directory
+4) /etc/ansible/ansible.cfg
+
+in config we can mention 
+search -- ansible config file git
+we can mention inventory
+roles directories
+logs location
+if we r connecting ansible using ssh key 
+it asks to connect or not -- then u will be interrupted
+to avoid this give host_key_checking = false
+
+let see usage of 1st option
+mkdir test
+cd test
+touch ansible.cfg
+cd ..
+export ANSIBLE_CONFIG=/home/ec2-user/test/ansible.cfg
+ansible --version
+output --
+config file = /home/ec2-user/test/ansible.cfg
+
+unset ANSIBLE_CONFIG
+ansible --version
+output --
+config file = /etc/ansible/ansible.cfg
+
+goto test directory
+cd test
+ansible --version
+output --
+config file = /home/ec2-user/test/ansible.cfg
+because config file is in PWD
+
+cd /home/ec2-user
+touch .ansible.cfg
+ansible --version
+output --
+config file = /home/ec2-user/.ansible.cfg
+
+ansible checks for config file in above four places
+the most convinient way is to place ansible.cfg in PWD
+
+create ansible.cfg in ansible-roboshop-roles
+
+ansible.cfg
+===========
+[defaults]
+
+inventory = inventory.ini
+log_path = /var/log/ansible.log 
+
+by this u can avoid giving -i inventory.ini on command line
+we can mention log file location like above
+if we give forks=150 it means this ansible-server can connect to 150 servers at a time
+
+push the baove code to git repo 
+clone to ansible server
+
+command to execute -- ansible-playbook main.yaml
+output --  msg: "Hi from Roles"
+
+execution flow -- main.yaml from ansible-roboshop-roles -- roles:demo:tasks:main.yaml -- 
+
+create one file in ansible-roboshop-roles
+
+roboshop.yaml
+==============
+- name: "configure {{ component }} server"
+  hosts: "{{ component }}"
+  become: yes
+  serial: 3
+  roles:
+  - "{{ component }}"
+
+if u pass component as mongodb it takes hosts: mongodb , roles: mongodb
+
+write all domains names in inventory.ini 
+
+inventory.ini 
+=============
+[mongodb]
+mongodb-dev.daws88s.online
+
+[catalogue]
+catalogue-dev.daws88s.online
+
+[redis]
+redis-dev.daws88s.online
+
+[user]
+user-dev.daws88s.online
+
+[cart]
+cart-dev.daws88s.online
+
+[mysql]
+mysql-dev.daws88s.online
+
+[shipping]
+shipping-dev.daws88s.online
+
+[rabbitmq]
+rabbitmq-dev.daws88s.online
+
+[payment]
+payment-dev.daws88s.online
+
+[frontend]
+frontend-dev.daws88s.online
+
+create mongodb repo in roles
+
+roles -- mongodb -- tasks -- main.yaml
+
+main.yaml
+=========
+- name: copy mongo repo
+  ansible.builtin.copy:
+    src: mongo.repo
+    dest: /etc/yum.repos.d/mongo.repo
+
+- name: install mongodb server
+  ansible.builtin.dnf:
+    name: mongodb-org
+    state: present
+
+- name: allow remote connections
+  ansible.builtin.replace:
+    path: /etc/mongod.conf
+    regexp: '127.0.0.1'
+    replace: '0.0.0.0'
+
+- name: start and enable mongodb
+  ansible.builtin.service:
+    name: mongod
+    enabled: yes
+    state: started
+
+by this all tasks in main.yaml will be executed
+
+create one repo files in mongodb 
+
+mongodb -- files -- mongo.repo
+
+mongo.repo
+==========
+[mongodb-org-7.0]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/
+enabled=1
+gpgcheck=0
+
+to give credentials to connect to all components 
+create one repo group_vars
+
+ansible-roboshop-roles -- group_vars -- all.yaml
+all.yaml is same as inventory.ini
+
+
+all.yaml
+========
+ansible_user: ec2-user
+ansible_password: DevOps321
+MONGODB_HOST: mongodb-dev.daws88s.online
+CATALOGUE_HOST: catalogue-dev.daws88s.online
+REDIS_HOST: redis-dev.daws88s.online
+USER_HOST: user-dev.daws88s.online
+CART_HOST: cart-dev.daws88s.online
+MYSQL_HOST: mysql-dev.daws88s.online
+SHIPPING_HOST: shipping-dev.daws88s.online
+RABBITMQ_HOST: rabbitmq-dev.daws88s.online
+ 
+if u want to give variables only useful for catalogue 
+ansible-roboshop-roles -- group_vars -- catalogue.yaml
+or u can mention in inventory.ini as [catalogue:vars]
+
+command to execute -- ansible-playbook -e component=mongodb roboshop.yaml
+
+in ansible-roles
+directory structure and its usage
+tasks -- we can mention tasks to be executed
+handlers -- we will discuss later
+templates -- files which contains variables for ex: service files
+files -- files which does not contain variables for ex: repo files
+vars -- role related variables
+defaults -- we can mention roles in defaults and vars
+
+now lets see catalogue
+create catalogur directory in roles
+ansible-roboshop-roles -- roles -- catalogue -- tasks -- main.yaml
+
+last time we have created files like
+nodejs_setup --  enable install nodejs & install dependancies
+app_setup -- create dir & create system user & download code & unarchive code
+system_setup -- 
+these are all common
+
+now create common directory in roles
+ansible-roboshop-roles -- roles -- common -- tasks -- main.yaml
+
+main.yaml
+=========
+- name: test call
+  ansible.builtin.debug:
+    msg: "Hi, I am configuring {{ component }}"
+
+
+to tell catalogue is depending upon common
+we should create meta directory in catalogue and create main.yaml file in that and mention dependancies there
+catalogue -- meta -- main.yaml
+
+main.yaml
+=========
+dependancies:
+- role: common
+#catalogue is dependant on common
+
+execution flow -- roles: catalogue -- meta:main.yaml -- common:tasks:main.yaml
+then it starts catalogue tasks execution
+
+create one file -- app-setup.yaml
+ansible-roboshop-roles -- roles -- common -- tasks -- app-setup.yaml
+
+app-setup.yaml
+==============
+- name: create system user roboshop
+  ansible.builtin.user:
+    name: roboshop
+    system: true
+    home: /app
+    shell: /sbin/nologin
+    comment: "Roboshop system user"
+
+- name: delete app directory
+  ansible.builtin.file:
+    path: /app
+    state: absent
+
+- name: create app directory
+  ansible.builtin.file:
+    path: /app
+    state: directory
+
+- name: delete {{ component }} zip file
+  ansible.builtin.file:
+    path: /tmp/{{ component }}.zip
+    state: absent
+
+- name: download {{ component }}
+  ansible.builtin.get_url:
+    url: https://roboshop-artifacts.s3.amazonaws.com/{{ component }}-v3.zip 
+    dest: /tmp/{{ component }}.zip
+
+- name: unarchieve {{ component }}
+  ansible.builtin.unarchive:
+    src: /tmp/{{ component }}.zip
+    dest: /app
+    remote_src: yes
+
+create one file -- app-setup.yaml
+ansible-roboshop-roles -- roles -- common -- tasks -- nodejs-setup.yaml
+
+nodejs-setup.yaml
+=================
+- name: enable nodejs 20
+  ansible.builtin.command: dnf module enable nodejs:20 -y
+
+- name: install nodejs
+  ansible.builtin.dnf:
+    name: nodejs
+    state: present
+
+- name: install dependencies
+  tags: 
+  - deployment
+  community.general.npm:
+    path: /app
+
+create one file -- systemd-setup.yaml
+ansible-roboshop-roles -- roles -- common -- tasks -- systemd-setup.yaml
+
+systemd-setup.yaml
+==================
+- name: copy {{ component }} service
+  ansible.builtin.template:
+    src: "{{ component }}.service.j2"
+    dest: "/etc/systemd/system/{{ component }}.service"
+  notify: restart "{{ component }}"
+
+- name: daemon reload
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+replace catalogue as component in above files
+
+to execute app-setup.yaml as part of catalogue we need to import that role
+generally in this folder structure bydefault main.yaml files will be executed
+search -- import role
+
+catalogue -- tasks -- main.yaml
+
+main.yaml
+=========
+- name: app setup
+  tags: 
+  - deployment
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: app-setup.yaml
+
+- name: nodejs setup
+  tags: 
+  - deployment
+  #ansible.builtin.import_role:
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: nodejs-setup.yaml
+
+- name: systemd setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: systemd-setup.yaml
+
+- name: copy mongo repo
+  ansible.builtin.copy:
+    src: mongo.repo
+    dest: /etc/yum.repos.d/mongo.repo
+
+- name: install mongodb client
+  ansible.builtin.dnf:
+    name: mongodb-mongosh
+    state: present
+
+- name: check products loaded
+  ansible.builtin.command: mongosh --host "{{ MONGODB_HOST }}" --quiet  --eval 'db.getMongo().getDBNames().indexOf("catalogue")'
+  register: catalogue_output
+
+- name: load the products
+  ansible.builtin.shell: mongosh --host "{{ MONGODB_HOST }}" </app/db/master-data.js
+  when: catalogue_output.stdout  | int < 0
+
+- name: start catalogue
+  tags: 
+  - deployment
+  ansible.builtin.service:
+    name: catalogue
+    state: restarted
+    enabled: yes
+
+execution-flow -- catalogue:meta:main.yaml -- common:main.yaml -- tasks:main.yaml -- execute import roles from common:app-setup.yaml & nodejs-setup.yaml & executes all roles
+
+command to execute -- ansible-playbook -e component=catalogue roboshop.yaml
+
+1. load catalogue role
+2. ansible finds meta directory and main.yaml
+3. it depends on common role
+4. ansible executes main.yaml in common/tasks folder
+5. now ansible starts executing catalogue/tasks/main.yaml
+6. we extracted common code into common/app-setup.yaml
+7. ansible imports this into catalogue/tasks/main
+
+catalogue.service -- template
+we should call it as catalogue.service.j2
+catalogue -- templates -- catalogue.service.j2
+copy catalogue.service into catalogue.service.j2
+if a variable is useful one or more places place that variable in group_vars/all.yaml
+
+place mongo.repo in catalogue/files/mongo.repo
+
+lets see config of redis
+
+create redis repo in roles
+
+roles -- redis -- tasks -- main.yaml
+
+main.yaml
+=========
+- name: enable redis 7
+  ansible.builtin.command: dnf module enable redis:7 -y
+
+- name: install redis
+  ansible.builtin.dnf:
+    name: redis 
+    state: present
+
+- name: allow remote connections
+  ansible.builtin.replace:
+    path: /etc/redis/redis.conf
+    regexp: '127.0.0.1'
+    replace: '0.0.0.0'
+
+- name: disable protected mode
+  ansible.builtin.lineinfile:
+    path: /etc/redis/redis.conf
+    regexp: 'protected-mode'
+    line: 'protected-mode no'
+
+- name: start and enable redis
+  ansible.builtin.service: 
+    name: redis
+    state: restarted
+    enabled: yes
+
+command to execute -- ansible-playbook -e component=redis main.yaml
+
+lets see config of user
+
+create user repo in roles
+
+roles -- user -- tasks -- main.yaml
+user -- templates -- user.service.j2
+user -- meta -- main.yaml
+
+tasks -- main.yaml
+==================
+dependencies:
+# catalogue is dependent on common role
+- role: common
+
+meta -- main.yaml
+=================
+- name: app setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: app-setup.yaml
+
+- name: nodejs setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: nodejs-setup.yaml
+
+- name: systemd setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: systemd-setup.yaml
+
+- name: start user
+  ansible.builtin.service:
+    name: user
+    state: restarted
+    enabled: yes
+
+templates -- user.service.j2
+============================
+[Unit]
+Description = User Service
+[Service]
+User=roboshop
+Environment=MONGO=true
+// highlight-start
+Environment=REDIS_URL="redis://{{ REDIS_HOST }}:6379"
+Environment=MONGO_URL="mongodb://{{ MONGODB_HOST }}:27017/users"
+// highlight-end
+ExecStart=/bin/node /app/server.js
+SyslogIdentifier=user
+
+[Install]
+WantedBy=multi-user.target
+
+command to execute -- ansible-playbook -e component=user roboshop.yaml
+
+lets see config of cart
+
+create cart repo in roles
+
+roles -- cart -- tasks -- main.yaml
+cart -- templates -- user.service.j2
+cart -- meta -- main.yaml
+
+tasks -- main.yaml
+==================
+dependencies:
+# catalogue is dependent on common role
+- role: common
+
+meta -- main.yaml
+=================
+- name: app setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: app-setup.yaml
+
+- name: nodejs setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: nodejs-setup.yaml
+
+- name: systemd setup
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: systemd-setup.yaml
+
+- name: start cart
+  ansible.builtin.service:
+    name: cart
+    state: restarted
+    enabled: yes
+
+templates -- cart.service.j2
+============================
+[Unit]
+Description = Cart Service
+[Service]
+User=roboshop
+// highlight-start
+Environment=REDIS_HOST="{{ REDIS_HOST }}"
+Environment=CATALOGUE_HOST="{{ CATALOGUE_HOST }}"
+Environment=CATALOGUE_PORT=8080
+// highlight-end
+ExecStart=/bin/node /app/server.js
+SyslogIdentifier=cart
+
+[Install]
+WantedBy=multi-user.target
+
+command to execute -- ansible-playbook -e component=cart roboshop.yaml
+
+let see config of MySQL
+
+roles -- MySQL -- tasks -- main.yaml
+MySQL -- vars-- main.yaml
+
+main.yaml
+=========
+- name: install MySQL server
+  ansible.builtin.dnf:
+    name: mysql-server
+    state: present
+
+- name: start and enable mysql server
+  ansible.builtin.service:
+    name: mysqld
+    state: restarted
+    enabled: yes
+
+- name: setup root password
+  ansible.builtin.command: mysql_secure_installation --set-root-pass "{{ MYSQL_ROOT_PASSWORD }}"
+
+vars -- main.yaml
+==================
+MYSQL_ROOT_PASSWORD: RoboShop@1
+
+command to execute -- ansible-playbook -e component=MySQL roboshop.yaml
+
+roles -- rabbitmq -- tasks -- main.yaml
+MySQL -- files -- RabbitMQ.repo
+
+main.yaml
+=========
+- name: copy rabbitmq repo
+  ansible.builtin.copy:
+    src: rabbitmq.repo
+    dest: /etc/yum.repos.d/rabbitmq.repo
+
+- name: install rabbitmq server
+  ansible.builtin.dnf:
+    name: rabbitmq-server
+    state: present
+
+- name: start and enable rabbitmq
+  ansible.builtin.service:
+    state: restarted
+    enabled: yes
+    name: rabbitmq-server
+
+- name: create rabbitmq user
+  community.rabbitmq.rabbitmq_user:
+    user: roboshop 
+    password: roboshop123
+    permissions:
+      - vhost: /
+        configure_priv: .*
+        read_priv: .*
+        write_priv: .*
+    state: present
+
+RabbitMQ.repo
+=============
+[modern-erlang]
+name=modern-erlang-el9
+baseurl=https://yum1.novemberain.com/erlang/el/9/$basearch
+        https://yum2.novemberain.com/erlang/el/9/$basearch
+        https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/rpm/el/9/$basearch
+enabled=1
+gpgcheck=0
+
+[modern-erlang-noarch]
+name=modern-erlang-el9-noarch
+baseurl=https://yum1.novemberain.com/erlang/el/9/noarch
+        https://yum2.novemberain.com/erlang/el/9/noarch
+        https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/rpm/el/9/noarch
+enabled=1
+gpgcheck=0
+
+[modern-erlang-source]
+name=modern-erlang-el9-source
+baseurl=https://yum1.novemberain.com/erlang/el/9/SRPMS
+        https://yum2.novemberain.com/erlang/el/9/SRPMS
+        https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-erlang/rpm/el/9/SRPMS
+enabled=1
+gpgcheck=0
+
+[rabbitmq-el9]
+name=rabbitmq-el9
+baseurl=https://yum2.novemberain.com/rabbitmq/el/9/$basearch
+        https://yum1.novemberain.com/rabbitmq/el/9/$basearch
+        https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-server/rpm/el/9/$basearch
+enabled=1
+gpgcheck=0
+
+[rabbitmq-el9-noarch]
+name=rabbitmq-el9-noarch
+baseurl=https://yum2.novemberain.com/rabbitmq/el/9/noarch
+        https://yum1.novemberain.com/rabbitmq/el/9/noarch
+        https://dl.cloudsmith.io/public/rabbitmq/rabbitmq-server/rpm/el/9/noarch
+enabled=1
+gpgcheck=0
+
+command to execute -- ansible-playbook -e component=RabbitMQ roboshop.yaml
+
+
+
+

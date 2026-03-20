@@ -860,5 +860,9 @@ gpgcheck=0
 command to execute -- ansible-playbook -e component=RabbitMQ roboshop.yaml
 
 
+if u want to define component name in code 
+for ex: catalogue -- vars -- main.yaml -- component: catalogue
 
+failed_when: if u want to fail the task, ansible exit
+changed_when: if rc == 0, ansible considers as changed
 

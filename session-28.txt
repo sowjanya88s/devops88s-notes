@@ -1,3 +1,5 @@
+group_vars -- variables required for all modules
+
 to run user component in background
 command -- nohup ansible-playbook -e component=user roboshop.yaml &
 by giving only & it executes only one commad in background
@@ -5,7 +7,10 @@ remaining commands output will be printed on screen only
 by giving nohup entire procedure will be executed in tha background
 nohup output will be saved at nohup.out file
 
-create instances & configure mongodb , catalogue , redis , user , cart, mysql
+create instances & configure mongodb , catalogue , redis , user , cart, MySQL
+
+in roles directory we have mentioned logs path as -- /var/log/ansible.log
+give full access (777) to log folder
 
 let see config of shipping
 
@@ -97,6 +102,7 @@ templates -- payment.service.j2
 common -- tasks -- python-setup.yaml
 in python-setup -- installing python , installing dependancies of python
 main.yaml in payment contains importing shipping data into mysql 
+
 roles -- payment -- tasks -- main.yaml
 ======================================
 - name: app setup
@@ -151,7 +157,7 @@ templates -- payment.service.j2
 ===============================
 copy payment.service here 
 
-common -- tasks -- pyton-setup.yaml
+common -- tasks -- python-setup.yaml
 ===================================
 - name: install python
   ansible.builtin.dnf:
@@ -172,8 +178,11 @@ common -- tasks -- pyton-setup.yaml
 to save log at /var/log/ansible.log 
 use this command -- nohup ansible-playbook -e component=mysql roboshop.yaml &> /var/log/ansible.log
 
-to see deailed log of ansible -- ansible-playbook -vv -e component=mysql roboshop.yaml 
-to see detailed log with shell commands also -- ansible-playbook -vvv -e component=mysql roboshop.yaml 
+to see deailed log of ansible 
+-- ansible-playbook -vv -e component=mysql roboshop.yaml 
+to see detailed log with shell commands also (debug mode)
+-- ansible-playbook -vvv -e component=mysql roboshop.yaml 
+
 create nginx repo in roles
 roles -- nginx -- tasks -- main.yaml
 nginx -- handlers -- main.yaml
@@ -230,6 +239,7 @@ nginx -- tasks -- main.yaml
     dest: /etc/nginx/nginx.conf
   notify: resatrt nginx
 
+here whenever changes happened in nginx.conf handlers will restart nginx with help of notify keyword
 
 nginx -- templates -- nginx.service.j2
 ======================================
@@ -238,7 +248,13 @@ place nginx.conf code here
 in the end u can see running handler
 command to execute -- ansible-playbook -e component=frontend roboshop.yaml
 
+in handlers folder -- main.yaml -- u should mention code for restarting nginx & with notify keyword use name(text) used in restart code
+
+while running first time also we r removing default nginx.conf & copying our file so here also handler runs 
+
 if u run this playbook for 2nd time nginx will be restarted because we r removing nginx.conf and copying nginx.conf again
+
+try the same in catalogue after copying catalogue.service use handler (to restart catalogue) , if there are changes it will be restarted otherwise not 
 
 tags
 ====
@@ -259,27 +275,41 @@ for ex:
 tags:
 - deployment
 
-
-tags: 
-  - deployment
-  #ansible.builtin.import_role:
-  ansible.builtin.include_role:
-
-to include role in nodejs-setup -- in installing dependancies section also
-u should mention tags 
-
-tags:
--deployment
- 
-
+when u pass tag=deployment tasks in app-setup module will be executed
 
 to run the deployment tag related module
 command -- ansible-playbook -e component=catalogue -t deployment roboshop.yaml
  
+
+
+- name: nodejs setup
+  tags:
+  - deployment
+  #ansible.builtin.include_role:
+  ansible.builtin.import_role:
+    name: common
+    tasks_from: nodejs-setup.yaml
+
+to include role in nodejs-setup -- in installing dependancies section also
+u should mention tags 
+
+- name: installing dependancies
+  tags:
+  - deployment
+  community.general.npm:
+    path: /app
+  
 there is one more thing -- include-role
 include-role -- way of calling other roles
 
 import_role respects the tags. if u apply tags to import_role those will be automatically applied to all the tasks inside that role
 
 include role does not respect tags
+
+command to delete instances and r53 records --
+ansible-playbook -i localhost, -e action=destroy -e ansible_username=ec2-user -e ansible_password=DevOps321 -e "instances=['mongodb','catalogue','redis','user','cart','mysql','rabbitmq','shipping','payment','frontend']" instances.yaml
+
+command to create instances and r53 records --
+ansible-playbook -i localhost, -e action=create -e ansible_username=ec2-user -e ansible_password=DevOps321 -e "instances=['mongodb','catalogue','redis','user','cart','mysql','rabbitmq','shipping','payment','frontend']" instances.yaml
+
 

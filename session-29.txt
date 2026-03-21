@@ -1,0 +1,343 @@
+how to call another role
+we have 2 options : import_role & include_role
+
+import_role vs include_role
+===========================
+1. tags applied to import_role will be automatically applied to all tasks inside it
+2. tags applied to include_role will not be cascaded
+3. import role usually parse the playbook before execution, it is static
+4. include role is dynamic , it will directly execute the playbook, it will not parse like import_role
+5. condition applied to import_role is applied to all tasks, include_role does not cares the condition applied to it
+6. u can't use loops in import_role , u can use loops in include_role
+
+create include-import repo in ansible-roboshop-roles-tf
+
+ansible-roboshop-roles-tf --> include-vs-import.yaml
+====================================================
+- name: include vs import
+  hosts: local
+  connection: local
+  roles:
+  - include-import
+
+
+ansible-roboshop-roles-tf --> roles --> include-import --> tasks --> main.yaml
+===================
+- name: call common role
+  #ansible.builtin.import_role:
+  ansible.builtin.include_role:
+    name: common
+    tasks_from: include-vs-import.yaml
+  when: os == "RedHat"
+  loop:
+  - ramesh
+  - suresh
+
+include-vs-import.yaml
+=======================
+- name: message-1
+  ansible.builtin.debug:
+    msg: "Hi from MSG-1"
+
+- name: set the os fact
+  ansible.builtin.set_fact:
+    os: "debian"
+
+- name: message-2
+  ansible.builtin.debug:
+    msg: "Hi from MSG-2"
+
+- name: message-1
+  ansible.builtin.debug:
+    msg: "Hi from MSG-3"
+
+command to execute -- ansible-playbook include-vs-import.yaml
+
+even if there is a small mistake in import_role -- playbook does not executes -- it throws error
+
+when u call tasks through import -- all tasks will come to playbook, it checks the syntax of playbook
+
+when u call tasks through include -- all tasks does not comes to playbook, it starts executing playbook without checking syntax,
+when it sees the error then only it will be thrown
+
+now we will see executing playbook using condition
+
+roles --> include-import --> vars --> main.yaml
+===============================================
+os: "RedHat"
+
+command to execute -- ansible-playbook include-vs-import.yaml
+
+now os = redhat , so playbook will be executed successfully
+
+in the middle of the playbook we will set os value with Debian
+means we are setting the variable dynamically
+include role does not cares the condition we have set in the middle of the playbook
+
+if we give import role, value of os changes when it encounters set_fact , then next statements will not be executed
+
+next we will see by applying condition, by applying conditions on import_role it will throws error like u cannot use loops on import_role , u should use include_role 
+
+by applying include_role each and every task in playbook will be executed for two times 
+
+upto now we have used static inventory (we have given either ip addresses or record names manually)
+
+dynamic_inventory
+=================
+in automation env, servers will be created and destroyed based on traffic. in this case we cannot use static inventory file. we need to dynamically query the instances , we can use dynamic inventory plugin from aws passing region, name of the instances, running state, etc
+
+
+now create two frontend-dev instances
+to get the ip addresses manually -- we will goto us-east-1 , search for frontend-dev and get ip's
+
+to do the same procedure dynamically
+seach -- ansible dynamic inventory aws cloud
+
+plugin is nothing but python code executing in the background
+
+our inventory file should end with aws_ec2.yaml
+
+now create one file -- in ansible-roboshop-roles -- frontend.aws_ec2.yaml
+=====================
+plugin: amazon.aws.aws_ec2
+regions:
+- us-east-1
+hostnames:
+- private-ip-address
+filters:
+  instance-state-name : running
+  tag:Name: frontend-dev
+compose:
+ ansible_host: private_ip_address
+keyed_groups:
+- separator: ''
+  key: tags.Component
+ 
+
+command to execute 
+-- ansible-inventory -i frontend.aws_ec2.yaml --list
+
+now by using dynamic inventory we can configure servers , command --
+ansible-playbook -i frontend.aws_ec2.yaml -e component=frontend roboshop.yaml
+
+upto now , we have hardcoded passwords and pushed to git by this everyone sees passwords. which is not good
+
+
+vault -- secret store
+=====
+ansible provided us one feature -- ansible vault 
+command to create ansible vault -- ansible-vault create vault.yaml
+MYSQL_ROOT_PAAWORD: RoboShop@1
+save the file and exit
+
+while creation of vault is asks for password for vault , by using this it encrypts the data in the vault
+by placing passwords in ansible-vault it encrypts
+
+cat vault.yaml
+shows some encrypted code
+
+ansible-vault view vault.yaml
+vault password: 
+by entering password u can view data
+
+ansible-vault edit vault.yaml
+give password
+MYSQL_ROOT_PASSWORD: RoboShop@1
+u can edit the data inside it
+
+configuration is of two types -- confidential and non-confidential
+
+in windows ansible-vault does not works
+so copy encrypted code 
+in MySQL folder -- vars -- main.yaml -- comment MySQL password
+
+in ansible-roboshop-roles -- group_vars -- create MySQL folder -- vault.yaml
+==========
+paste encrypted code here
+
+now try to configure MySQL
+ansible-playbook -e component=MySQL roboshop.yaml
+while configuring MySQL, it loads all variables from group_vars
+in group_vars -- encrypted code is there
+but it needs password for decryption
+throws error -- attempting to decrypt but no vault secrets found
+
+make some changes in commad 
+ansible-playbook -e component=MySQL roboshop.yaml --ask-vault-pass
+now it asks password & after giving & it decrypts password
+
+in ansible.cfg -- 
+==============
+ask_vault_pass = True
+
+by this it asks password with this command
+ansible-playbook -e component=MySQL roboshop.yaml
+
+we should place vault password in git repository
+
+in server , open .ansible directory , 
+touch .mysql_vault
+echo "DevOps321" > .mysql_vault
+cat .mysql_vault
+
+in ansible.cfg  -- comment ask_vault_pass line
+===============
+vault_password_file = ~/.ansible/.mysql_vault
+
+now try to configure MySQL again
+ansible-playbook -e component=MySQL roboshop.yaml
+
+the playbook will be executed successfully
+
+there is some manual process here. and it is a bit complex
+
+solution for this is ... here aws is a platform 
+platform -- features required for us are available here and it provides solutions for many things
+there is a solution for configuration too
+in aws to store credentials safely we have credential manager & ssm parameter store
+in ssm parameter store -- we can store non confidential information -- just key value pairs
+the code running in ec2 can get this info dynamically related to credentials from ssm parameter store
+
+parameter store
+===============
+parameter store -- create parameter -- /roboshop/dev/mysql_root_password
+type -- secure string (for passwords)
+use string type when u want to give key value pairs
+value -- RoboShop@1 (password of MySQL) -- create parameter
+
+after creation -- u can see decrypted value -- show decrypted value
+
+to get this parameter value dynamically
+
+in ansible-roboshop-roles -- group_vars -- MySQL -- vault.yaml
+remove that content
+in ansible.cfg -- comment vault password file location
+
+plugins add dynamic behaviour
+search -- ansible ssm parameter store lookup  plugin
+
+group_vars -- MySQL -- vault.yaml
+=================================
+MYSQL_ROOT_PASSWORD: "{{ lookup('amazon.aws.aws_ssm', '/roboshop/dev/mysql_root_password', 'us-east-1', decrypt=True ) }}"
+
+now configure mysql -- ansible-playbook -e component=mysql roboshop.yaml
+
+in ssm parameter store we can store key-value pairs , url's , passwords etc
+
+in interviews , u can tell that in previous days we have used ansible-vault , but we faced difficulties in maintaining them. so now we have upgraded to ssm parameter store or secrets manager. in that we have used lookup plugin to get the values in ssm paramter store
+
+we have one more option in aws to store secrets -- secret manager
+-- its a bit costly
+secret manager
+==============
+secret manager -- store a new secret -- other type of secret
+key/value -- MYSQL_ROOT_PASSWORD -- Roboshop@1
+u can add row -- u can store multiple secrets in one secret
+configure secret -- /roboshop/dev/mysql_root_password
+next -- next -- store
+ur secret will be created
+
+after creation -- open secret -- overview -- retrieve secret value
+
+here secret will be stored in json format
+
+for using this also plugins are available
+search -- aws secret manager plugin
+in one secret -- we can store multiples
+so get one from it --
+search -- aws secrets manager ansible lookup json filter key
+
+group_vars -- MySQL -- vault.yaml
+==================================
+MYSQL_ROOT_PASSWORD: "{{ (lookup('amazon.aws.aws_secret', 'roboshop/dev/mysql_root_password', region='us-east-1') | from_json).MYSQL_ROOT_PASSWORD }}"
+
+now configure mysql -- ansible-playbook -e component=mysql roboshop.yaml
+
+command to delete secret instantly in secrets manager in cli --
+ aws secretsmanager delete-secret \
+  --secret-id <secret-name> \
+  --force-delete-without-recovery
+
+because in GUi u cannot delete a secret on the same day
+min it takes 7 to 30 days
+
+parallel execution
+==================
+ansible supports parallel execution means it can connect to multiple servers at a time it can connect upto 100 servers
+
+client we r using to connect should be powerful (its config should be high)
+
+consider that we have 17 frontend servers
+to check 17 servers ips
+command -- ansible-inventory -i frontend.aws_ec2.yaml --list
+
+if we try to execute ansible-playbook to configure frontend 
+command to execute -- ansible-playbook -i frontend.aws_ec2.yaml -e component=frontend roboshop.yaml
+
+ansible at a time by default can connect to 5 servers . these are called as forks. we can control this -- for that mention in ansible.cfg
+===========
+forks = 8
+
+means each task is targeted on 8 servers, single playbook execution because we have 17 servers 
+if u have higher server capacity it will connect to servers batchwise ( in first batch -- 8 , next batch -- 8 like that)
+in this process response time might differ
+
+serial
+======
+consider we have given serial = 5
+from 8 forks -- takes 5 first
+runs entire playbook
+next runs on 3 servers
+it does not waits for task completion , it makes ready on remaining servers (called as rolling update)
+making changes in all servers at a time is not correct because if there is any error all servers gets down
+ 
+we have mention serial in playbook
+ansible-roboshop-roles -- roboshop.yaml (mention it above roles)
+=======================================
+- name: "configuring {{ component }}"
+  hosts: "{{ component }}"
+  become: yes
+  serial: 5
+  roles:
+  - "{{ component }}"
+
+now the playbook will be executed in 5 servers and then executes in 3 servers
+
+next see the config of frontend
+command to execute -- ansible-playbook -i frontend.aws_ec2.yaml -e component=frontend roboshop.yaml
+
+throttle
+=========
+if we restart 5 servers at a time -- 5 servers gets down
+in restart module of frontend
+ansible-roboshop-roles -- frontend -- tasks -- main.yaml (write below of name)
+throttle: 2
+
+by this out of 5 it restarts 2 servers first and then restarts 2 servers 
+next see the config of frontend
+command to execute -- ansible-playbook -i frontend.aws_ec2.yaml -e component=frontend roboshop.yaml
+
+ansible-tower -- enterprise edition -- user-interface
+
+ansible is number 1 tool for config management
+
+disadvantages
+=============
+why we can't use ansible for infra creation ??
+if we want to change names of already existing instances -- not possible -- ansible does not understands this
+
+ansible does not stores what it have created before . this is the problem
+because ansible does not have state 
+state is very important -- this is reason we can't use ansible for infra creation
+by using ansible we can create infra but we can't manage infra
+
+infra-as-a-code -- for ex: terraform -- they keep track of resources it have created of it in store
+again i have asked for some change -- compares what we have done before & now what we have to change -- this is called state
+
+terraform -- creating servers
+ansible -- connects to those server and configures them
+
+
+
+
+

@@ -25,7 +25,7 @@ aws console -- create server --connect to that server --
 aws configure
 give access key & secret access key here 
 region name : us-east-1
-output format: dont't give anything
+output format: don't give anything
 
 ls -la
 in .aws folder -- credentials -- ur access key & secret access key will be stored here
@@ -85,7 +85,7 @@ for better readability we can add line breaks by using \ (forward slash)
 
 if u script upto now -- it will show private ip of instance as output
 
-now e have to update AWS R53 records
+now we have to update AWS R53 records
 
 create variables for zone_id & domain name
 
@@ -210,7 +210,7 @@ connect to mongodb instance and run below script
 
 install git & clone git repo 
 
-place mongo.repo in cucurrent git folder -- roboshop-shell
+place mongo.repo in current git folder -- roboshop-shell
 
 mongodb.sh
 ==========
@@ -270,7 +270,7 @@ connect to catalogue instance and run below script
 
 install git & clone git repo 
 
-place catalogue.repo in cucurrent git folder -- roboshop-shell
+place catalogue.repo in current git folder -- roboshop-shell
 
 catalogue.sh
 =============
@@ -387,7 +387,7 @@ while unzipping code -- if try unzipping the code for 2nd time -- it will asks u
 in that case script can't make decision
 so first remove the code in that directory and then  unzip the code
 
-copy mongo repo and then install mongo repo
+copy mongo repo and then install mongodb
 give mongo url -- A record in a variable
 
 be careful while loading the data in db
@@ -395,7 +395,7 @@ check mongodb if data exists or not
 mongosh --host $MONGODB_HOST --quiet  --eval 'db.getMongo().getDBNames().indexOf("catalogue")
 if output of above command is -1 then -- data does not exists
 if output of above command is 1 then -- data already exists
-take that value into index varaiable 
+take that value into index variable 
 
 if index is less than 0 the load data & restart catalogue service
 

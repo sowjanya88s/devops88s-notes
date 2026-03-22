@@ -7,7 +7,7 @@ sed -e -- extra parameters
 
 we need to change the ip in conf file 127.0.0.1 to 0.0.0.0
 we need to change protection mode from yes to no
-when sed --  sees see protected-mode -- /c -- change that line to new line protected-mode no
+when sed --  sees 2 protected-mode -- /c -- change that line to new line protected-mode no
 
 redis.sh
 ========
@@ -264,7 +264,7 @@ command to execute -- sh mysql.sh
 
 let see the configuration of payment using shell script
 install python packages
-python -- depeendancies -- pip
+python -- dependancies -- pip
 
 payment.sh
 ==========
@@ -391,7 +391,7 @@ build tool -- maven
 checking idempotency --
 mysql -h $MYSQL_HOST -uroot -pRoboShop@1 -e 'use cities' -- here we are checking cities database exists or not in non interactive mode
 if schema exists then exit status code will be 0 -- data is loaded
-if schema does not exists then exit status code will be 0 -- data not loaded
+if schema does not exists then exit status code will be 1 -- data not loaded
 
 shipping.sh
 ============
@@ -559,7 +559,7 @@ this will creates go.mod file
 
 go get -- gets dependancies
 go build -- builds the code
-by this dispatch file wiil be created
+by this dispatch file will be created
 
 create dispatch.service file and change rabbitmq ip there give a record of it
 
@@ -621,7 +621,7 @@ PID of SCRIPT-2: 10312
 echo "I am in: $COUNTRY"
 echo "PID of SCRIPT-2: $$"
 
-command to execute when u give source -- sh script-1.sh
+command to execute when u give source -- sh 21-script-1.sh
 output 
 I am in: INDIA
 PID of SCRIPT-1: 11396

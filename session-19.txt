@@ -1,5 +1,3 @@
-
-
 today we will place all the repetitive code in one file and by using that we will configure roboshop project again
 
 create one server and use aws configure command 
@@ -86,7 +84,7 @@ in catalogue, there is no problem by running app_setup first and nodejs setup la
 place npm install command in nodejs_setup -- common for nodejs
 
 now we have to create systemctl service -- create systemd_setup function in common.sh and call it from any module whenever required
-in systemd_setup -- code to related to copying service file related to module , reloading daemon, enabling module & starting module
+in systemd_setup -- code  related to copying service file related to module , reloading daemon, enabling module & starting module
 
 loading data into mongodb -- is not common -- so write the code related to it in catalogue only
 
@@ -120,6 +118,8 @@ if [ $INDEX -le 0 ]; then
 else
     echo -e "$(date "+%Y-%m-%d %H:%M:%S") | Products already loaded ... $Y SKIPPING $N"
 fi
+
+command to execute -- sh catalogue.sh
 
 now we will see configuration of redis
 nothing is common in redis db
@@ -220,6 +220,7 @@ create java_setup function -- in that write the code of maven installation and c
 
 loading mysql data into mysql database -- write code related to that in shipping.sh
 copy shipping.service file into shell-roboshop-common
+
 shipping.sh
 ===========
 #!/bin/bash
@@ -284,7 +285,7 @@ command to execute -- sh rabbitmq.sh
 
 next we configure payment
 
-create python setup function in common.sh -- place code related to installation of python and its depenndancies
+create python setup function in common.sh -- place code related to installation of python and its dependancies
 
 payment.sh
 ==========
@@ -464,7 +465,7 @@ print_total_time(){
 }
 
 we will do some tasks like  delete old logs , backup , disk utilization and trigger email using shell scripts
-application writes logs continuously based on usage the storage increases. in that case we should delete log files older than 14 days
+application writes logs continuously based on usage by that storage increases. in that case we should delete log files older than 14 days
 some files need to be taken backup & some files need to be moved to another location
 
 now we will see writing shell script for deleting log files older than 14 days

@@ -5,7 +5,7 @@ create one file -- students.xml
 
 students.xml
 ============
-<!-- Student list -->
+<!-- Students list -->
 <Students>
 <!-- Student Object -->
 
@@ -13,7 +13,7 @@ students.xml
         <FirstName>Ramesh</FirstName>
         <DOB>1999-01-01</DOB>
         <Email>info@joindevops.com</Email>
-        <!-- Adress field -->
+        <!-- Address field -->
   <!-- <Address>104 gandhi apartments hyderabad</Address> -->
  <!-- Address object -->
         <!-- <Address>
@@ -234,15 +234,17 @@ to connect amazon using ansible we have to write commands in ansible playbook by
 ansible handles yaml code very easily
 
 there will be community modules also
-seach -- ansible modules -- docs.ansible.com
+search -- ansible modules -- docs.ansible.com
 we can also create github repo by using ansible
 by using ansible we can do config mgmt (connecting to server and installing packages and configuring them)
-and by using ansible we can connect to other systems (thiis is not popular)
+and by using ansible we can connect to other systems (this is not popular)
 
 to connect to other systems terraform is popular
 we discuss the reason for it at the end
 
-to print anything using ansible
+to print anything using ansible --
+hello-world.yaml
+===============
 - name: Hello World
   #hosts: web
   hosts: local
@@ -282,7 +284,7 @@ that is how ansible acts as heterogeneous
 
 state: restarted    -- means restarting service
 state: enabled    -- means enabling service
-state: stopped    -- means restarting service
+state: stopped    -- means stopping service
 
 playbook is a list of tasks that can be executed against any server as part of configuration management
 
@@ -305,7 +307,7 @@ in below program variable are defined at play level so they are called play leve
     ansible.builtin.debug:
       msg: "Course is: {{ COURSE }}, Trainer is: {{ TRAINER }}"  //to print variable {{ <var-name> }}
 
-comand to execute -- ansible-playbook -i inventory.ini 04-vars.yaml
+command to execute -- ansible-playbook -i inventory.ini 04-vars.yaml
 
 output --
 msg: "Course is: DevOps with AWS , Trainer is: Sivakumar Reddy "
@@ -315,7 +317,7 @@ if a variable is defined at play level and task level -- which value will be pri
 this is called as overriding
 if we does not override what we mentioned at play level that will be printed
 
-variables defined at play level -- will be assigned to all taks -- called inheritance
+variables defined at play level -- will be assigned to all tasks -- called inheritance
 
 05-vars.yaml
 ============
@@ -333,10 +335,10 @@ variables defined at play level -- will be assigned to all taks -- called inheri
     ansible.builtin.debug:
       msg: "Course is: {{ COURSE }}, Trainer is: {{ TRAINER }}"
 
-comand to execute -- ansible-playbook -i inventory.ini 05-vars.yaml
+command to execute -- ansible-playbook -i inventory.ini 05-vars.yaml
 
 output -- 
-msg: "Course is: DevOps with AWS ,  Trainer is: Sivakumar Reddy "
+msg: "Course is: Ansible ,  Trainer is: Sivakumar Reddy "
 
 without disturbing the main file we can mention variables at another place and we can use them in playbook
 
@@ -361,7 +363,7 @@ TRAINER: "Sivakumar Reddy"
       msg: "Course is: {{ COURSE }}, Trainer is: {{ TRAINER }}"
 
 
-comand to execute -- ansible-playbook -i inventory.ini 06-course.yaml
+command to execute -- ansible-playbook -i inventory.ini 06-course.yaml
 
 output
  msg: "Course is: DevOps with AWS , Trainer is: Sivakumar Reddy 
@@ -389,7 +391,7 @@ we can take info from user also
       msg: "username is: {{ username }}, password is: {{ password }}"
 
 
-comand to execute -- ansible-playbook -i inventory.ini 07-vars.yaml
+command to execute -- ansible-playbook -i inventory.ini 07-vars.yaml
 
 output --
 Please enter your username

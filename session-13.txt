@@ -1,10 +1,10 @@
-Linus File system heirarchy
+Linux File system heirarchy
 
 c disk -- left for OS
 
 go to root folder -- cd /
 
-in github -- check -- concepts repo -- for brief exaples 
+in github -- check -- concepts repo -- for brief examples 
 
 afs -- related to aws
 bin -> usr/bin -- softlink
@@ -21,7 +21,7 @@ bin -> usr/bin -- softlink
 
 /etc -> extra configuration. Configurations related to system packages or user installed packages are here
 
-/home -> when u craete user ,any user related directories are here, /home/<username> hidden directories and files will be here related to user
+/home -> when u create user ,any user related directories are here, /home/<username> hidden directories and files will be here related to user
 
 /lib and /lib64 -> libraries required for system related commands  are here..
 
@@ -33,7 +33,7 @@ later we mount them on our required path
 
 /mnt -> used to mount extra disks in linux server are here for temp purpose
 
-/opt -> optional. when you installed a software manually(ex-- by using arepo) you do it here. /opt/roboshop, /opt/tomcat, /opt/jobss etc.
+/opt -> optional. when you installed a software manually(ex-- by using a repo) you do it here. /opt/roboshop, /opt/tomcat, /opt/jobss etc.
 
 /proc -> processor id information, /proc/cpuinfo, /proc/meminfo. running process info is here related to kernel
 ls -l /proc
@@ -59,7 +59,7 @@ in recent days the RAM in mobiles are getting from 8GB to 16GB. they take some m
 
 Hard Disk vs Network Disk
 =========================
-hard disk near to comupter
+hard disk near to computer
 network disk, any where in the internet like google drive, Microsoft drive, S3, etc..
 
 compared to network disk HD acts fast and latency is less
@@ -85,7 +85,7 @@ EC2 -- volumes -- create volume --
 general purpose SSD (gp3) (in olden days they store data in magnetic tapes)
 size -- 20 Gb
 az should be same as server az
-create voulme --wait until it comes to ready state
+create volume --wait until it comes to ready state
 
 now select the volume -- attach the disk to required instance -- attach volume
 

@@ -77,12 +77,12 @@ error-handling.yaml
   tasks:
   - name: check user exist or not
     ansible.builtin.command: id roboshop
-    register: user_ouput
+    register: user_output
     ignore_errors: true //to ignore the error
 
   - name: print the output
     ansible.builtin.debug:
-      msg: "{{ user_ouput }}"
+      msg: "{{ user_output }}"
 
   - name: create user  //creation of user when status is failure
     ansible.builtin.command: useradd roboshop
@@ -145,7 +145,7 @@ now we will automate our project by using ansible
 create one repo -- roboshop-ansible
 clone the repo
 we will do all things using ansible
-for instance creation & R53 records we can ansible
+for instance creation & R53 records we can use ansible
 
 we can do this in windows servers also , there we should use rdpc  where as in linux we use ssh protocol
 

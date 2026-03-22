@@ -62,7 +62,7 @@ FUNC_NAME(){
 	code
 }
 bydefault shell doesn't executes, function will be executed when we call
-whenver required we can call that function and we can pass parameters to the function
+whenever required we can call that function and we can pass parameters to the function
 
 FUNC_NAME parameter-1 parameter-2
 inside the function they will be treated as $1 , $2
@@ -115,9 +115,9 @@ when we write an automation script -- to check what happened with it -- logs are
 redirections
 =============
 ls -l > output.txt -- output will be redirected to output.txt
-lsfsa -l 1> output.txt -- success output will be redirected to output.txt
-lsfsa -l 2> output.txt -- failure output will be redirected to output.txt
-lsfsa -l &> output.txt -- both success & failure output will be redirected to output.txt
+ls -l 1> output.txt -- success output will be redirected to output.txt
+ls -l 2> output.txt -- failure output will be redirected to output.txt
+ls -l &> output.txt -- both success & failure output will be redirected to output.txt
 1 -> success
 2 -> failure
 
@@ -168,7 +168,7 @@ installing nginx ... success
 installing mysql ... success
 installing nodejs ... success
 
-tee command -- reads standard input and writes it simultaneously to both standarad output(on screen) and one or more files
+tee command -- reads standard input and writes it simultaneously to both standard output(on screen) and one or more files
 don't do any write operations inside git repo
 
 ls -l | tee output.txt
@@ -208,7 +208,7 @@ prints 1 to 100 as output
 
 $@ -- takes parameters passed to script one by one
 
-upto now we are bindly installing the package. instead of that we can check whether the given package is installed , if it is installed skip it
+upto now we are blindly installing the package. instead of that we can check whether the given package is installed , if it is installed skip it
 if not installed then install it now
 
 for that we can run
@@ -267,7 +267,7 @@ output
 gcc already installed, skipping
 python3-devel already installed, skipping
 
-bydefault in linux success is printed in green clour and failure is printed in red colour and skipping is printed in white colour
+bydefault in linux success is printed in green colour and failure is printed in red colour and skipping is printed in white colour
 there are colours in linux for that there are colour codes like below
 e -- enable
 '\e[31m'
@@ -346,7 +346,7 @@ mysql already installed ...(in white) skipping(in yellow color)
 
 error handling
 ==============
-instaed of writing validate command everytime we can use
+instead of writing validate command everytime we can use
 set -e -- checks for errors , if there are errors it will exit
 we can remove validate line or comment it and then no.of lines in code decreases
 
@@ -407,7 +407,7 @@ by using set script exited but we can't know what is happening there
 
 so use validate statement , it has 2 advantages
 1.it checks
-2.we trace where we are
+2.we can trace where we are
 
 we can also use trap along with set
 
@@ -486,7 +486,7 @@ by above script we can't get success (if it installed now) in the output and we 
 
 by placing validate function in the program we can understand the flow of the script
 
-according to performance level trap and validate are good
+according to performance level -- trap and validate are good
 
 
 up to now,
@@ -522,7 +522,7 @@ ec2 instance ,
 r53 records, by placing commands related to them in a shell script we can create them
 
 roboshop.sh --  we r passing mongodb redis catalogue
-lopps through the arguments
+loops through the arguments
 create mongodb instance
 update mongodb record
 create redis instance

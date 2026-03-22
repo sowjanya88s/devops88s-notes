@@ -136,7 +136,7 @@ loading path of nodejs --- command -- which node --- /bin/node or /usr/bin/node
 u can place the output of which node in exec start
 index.js starts the nodejs application and that is in /app folder
 
-in that we will mention db-private-ip (to connect with db, application need db ip address and (username & pwd will be mentioned in code done by developers)) and index.json file location
+in that we will mention db-private-ip (to connect with db, application need db ip address and (username & pwd will be mentioned in code done by developers)) and index.json file location.
 here all three servers (frontend ,backend , db servers) are in same network , by using private ip here application server can connect to db server fastly
 
 port(3306 by default) and username & password will be mentioned in dbconfig.js that is done by developers
@@ -178,7 +178,7 @@ netstat -lntp -- 8080 opened by node -- u can see
 application health check
 curl http://<app-url>
 
-checkinga whether app can connect to db
+checking whether app can connect to db
 telnet <db-url> 3306 (<dp-ip>)
 
 

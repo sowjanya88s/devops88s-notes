@@ -51,9 +51,9 @@ create log file which stores the log of the current script
 give the path of log directory in LOGS_FOLDER
 
 write usage function to tell the user how to execute the script -- if he supplies no arguments 
-for this script we need to pass atleast 2 arguments -- source_directory , destination directory -- if user doesnot provided two arguments -- call usage function
+for this script we need to pass atleast 2 arguments -- source_directory , destination directory -- if user does not provided two arguments -- call usage function
 
-3rd argument is optional -- i.e how many days older files we need to check in source directory -- if user provides that value script takes it otherwise default value is 14
+3rd argument is optional -- i.e how many days older files we need to check in source directory -- if user provides that value -- script takes it otherwise default value is 14
 validate if source directory and destination directory exists or not
 take source directory as $1
 take destination directory as $2
@@ -220,13 +220,13 @@ echo ""
 echo "test from shell"
 } | msmtp "info@joindevops.com"
 
-disk utilsation, trigger email if du is more than 70
+disk utilisation, trigger email if du is more than 70
 
 after this u will receive mail -- test from shell
 
 now we have to check disk utilization , trigger email if du is more than 70
 
-command to check disk uitilization -- df -Th
+command to check disk utilization -- df -Th
 in that output we don't need the first line
 we need only disk utilization and it is in 6th column & disk mount points and it is in 7th column
 below command shows all rows except Filesystem row

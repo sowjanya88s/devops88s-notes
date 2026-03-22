@@ -141,7 +141,7 @@ Disadvantages
 from this shell scripting a format came
 that format is used by ansible in the background
 
-create two instances
+create two instances -- 1.node 2.shell-server
 
 without logging into server
 logging to node server from shell scripting server
@@ -287,7 +287,7 @@ we have Markup languages
 ========================
 HTML (Hyper Text Markup Language), XML (Extensive Markup Language)
 
-when we place data in registaration form markup language take values like this sends to backend
+when we place data in registration form markup language take values like this sends to backend
 <Register>
 	<Name>Sivakumar</Name>
 	<Mobile>12345678</Mobile>

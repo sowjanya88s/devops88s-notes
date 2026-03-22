@@ -4,7 +4,7 @@ to run user component in background
 command -- nohup ansible-playbook -e component=user roboshop.yaml &
 by giving only & it executes only one commad in background
 remaining commands output will be printed on screen only
-by giving nohup entire procedure will be executed in tha background
+by giving nohup entire procedure will be executed in the background
 nohup output will be saved at nohup.out file
 
 create instances & configure mongodb , catalogue , redis , user , cart, MySQL
@@ -19,7 +19,7 @@ create shipping directory in roles
 roles -- shipping -- tasks -- main.yaml
 app-setup is common for all components
 create java-setup.yaml file in common folder
-in java setup we should write maven & mysq installation , installing java dependancies , and renaming jar file
+in java setup we should write maven & mysql installation , installing java dependancies , and renaming jar file
 import java-setup by using import role
 systemd-setup is common which includes copying service file & starting service
 now we should load mysql products & restart shipping service

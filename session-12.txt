@@ -83,7 +83,7 @@ application size becomes low
 
 1)config of java application
 
-maven is the build 
+maven is the build tool
 .jar -- output file
 .jar has inbuilt lightweight server
 

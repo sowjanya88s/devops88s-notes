@@ -27,7 +27,7 @@ else{
 
 by seeing the output we can understand whether the given command is executed successfully or not
 
-any scripting or programming language contains thes --
+any scripting or programming language contains these --
 variables
 data types
 conditions
@@ -68,7 +68,7 @@ change in one place reflect everywhere you refer
 easy to maintain
 readable
 
-insead of that we can give the names of the person in variables
+instead of that we can give the names of the person in variables
 like  PERSON1=Trump ,PERSON2=Putin
 
 while refering we should follow some sysntax
@@ -162,14 +162,14 @@ Please enter your password::
 
 Password is sowji123
 
-now let's see how to dynamically execute a command and take tha value into a variable
+now let's see how to dynamically execute a command and take the value into a variable
 time when script execution starts
 $date -- shows time with date hours minutes secs in UTC 
 time when script execution ends
 by the difference between start and end we can tell the required time to execute the script
 to caluclate the difference we need only digits (numeric format)
 sleep 10 -- for 10 sec we can't do anything on terminal
-first brace is for 9 mathematics
+first brace is for  mathematics
 second brace is for command execution
 
 date %s -- shows the time in seconds
@@ -206,7 +206,7 @@ Number of variables passed to script: $#
 Script name: $0
 Present which directory you are in: $PWD
 Who is running this script: $USER
-Home direcory of the user: $Home
+Home directory of the user: $Home
 PID of the script: $$
 sleep 100 & -- this will be executed in background
 Background process id: $!

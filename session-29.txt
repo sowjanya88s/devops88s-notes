@@ -127,6 +127,7 @@ vault -- secret store
 =====
 ansible provided us one feature -- ansible vault 
 command to create ansible vault -- ansible-vault create vault.yaml
+asks to set password for vault
 MYSQL_ROOT_PAAWORD: RoboShop@1
 save the file and exit
 

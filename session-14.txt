@@ -42,7 +42,7 @@ filesystems can be -- xfs , ext3 , ext4
 now create one directory here
 mkdir softlinks
 command to create softlink of a file -- 
-syntax -- ln -s or ln <original-file-name> <link-file-name>
+syntax -- ln -s or ln -s <original-file-name> <link-file-name>
 ln -s ../Linux.txt soft-link
 this will create softlink of file Linux.txt in links folder with name soft-link
 permissions starting with l -- means softlink  && soft-link file points to original file Linux.txt
@@ -59,7 +59,7 @@ output -- /usr/bin/dnf
 ls -l /usr/bin/dnf
 ls -l /usr/bin/yum
 both (/usr/bin/dnf & /usr/bin/yum) pointed to dnf-3 
-by this even if we enter in background dnf will be executed
+by this even if we enter yum in background dnf will be executed
 
 many companies developed projects using rhel-7 & rhel-8. so by suddenly updating yum with dnf they need to do many changes. to support backward compatibility they have pointed yum to dnf (because without breaking present system we need to do the updates)
 YUM -> Before RHEL-8 YUM is the package manager
@@ -73,7 +73,7 @@ new version came dnf-4
 touch dnf-4
 to perform version switch without downtime point dnf-4 to dnf
 ln -fns dnf-4 dnf
-if any problem comes with dnf-4 , we will perfom rollback to dnf-3
+if any problem comes with dnf-4 , we will perform rollback to dnf-3
 ln -fns dnf-3 dnf
 
 
@@ -220,7 +220,7 @@ echo "hello world" -- output -- hello world
 git add <file-name>
 git status
 if filename comes in red colour -- then ur code is in ur workspace
-if filename comes in green colour -- then ur code  not exists ur local repo 
+if filename comes in green colour -- then ur code is in ur local repo 
 
 3. commit to local repo
 

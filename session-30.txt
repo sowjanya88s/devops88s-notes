@@ -1,0 +1,89 @@
+create 2 servers -- node and ansible
+create node server with the help of key pair
+create ansible server without key pair
+so we can connect node using public key
+
+now connect to ansible using password
+cd .ssh
+vi key.pem
+copy private key of node into ansible
+now try to connect to node from ansible
+ssh -i <private-key> ec2-user@<node-private-ip>
+
+check algorithm of public key
+cat daws88s.pub
+its using ssh ed algorithm (ssh-ed25519)
+with this algorithm ansible is not accepting remote server logins
+ansible is only accepting rsa algorithms
+
+so now login to node
+create rsa key 
+ssh-keygen -t rsa -f ansible
+by this ansible , ansible.pub keys will be generated
+create ansible user
+useradd ansible
+cd /home/ansible
+ls -al
+mkdir .ssh
+cd .ssh
+chmod -R 700 .ssh
+vi authorized_keys
+place ansible.pub content here
+chmod 600 authorized_keys
+chown ansible:ansible authorized_keys
+chown -R ansible:ansible .ssh
+
+now goto ansible server
+cd /home/ec2-user
+vim ansible
+copy private key i.e ansible here
+chmod 600 ansible
+ssh -i ansible ansible@<private-ip-of-node>
+now we can connect to node server from ansible server
+
+we can tell in interviews , that we have generated keys and tried to connect because of ssh ed algorithm is a new one so it does not have FIPS compliance that is why we are not able to connect
+
+open ansible repo -- ansible.cfg
+===============================================
+private_key_file = /home/ec2-user/ansible
+remote_user = ansible
+
+we are mentioning private key & remote user used to connect to ansible from node server
+
+inventory.ini
+=============
+[ansible]
+<pivate-ip-of-node>
+
+01-playbook.yaml
+================
+hosts: ansible
+
+
+now goto ansible server
+mkdir ansible-1
+cd ansible-1
+clone git repo of ansible
+cd ansible
+ansible-playbook -i inventory.ini 01-playbook.yaml
+u can see it can connect by taking credentials from ansible.cfg , inventory.ini
+
+ansible all -i <private-key-of-node>, -e ansible_user=ansible -m ping
+u can see it can connect by taking credentials from ansible.cfg
+
+in this process we can connect using key based authentication
+by this process there is no need to mention username & password
+we have to mention private key file name & username in ansible.cfg
+to give sudo access to ansible user add user ansible to wheel group
+
+if u think managing keys are difficult then u can use ansible username & password
+
+process
+=======
+get the private key access to ansible server
+configure the path in ansible.cfg
+make sure keys are RSA based      ----- 38 mins ansible completed
+
+
+
+

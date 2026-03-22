@@ -142,7 +142,7 @@ command to execute -- ansible-playbook -i inventory.ini shipping.yaml
 command to do health check in ansible server -- curl http://catalogue-dev.sowjanya.fun:8080/health
 
 command to check telnet in ansible server --
-telnet reis-dev.sowjanya.fun 6379
+telnet redis-dev.sowjanya.fun 6379
 
 next we will see config of rabbitmq
 check module in google to create username & password & permissions for rabbitmq

@@ -3,8 +3,8 @@ we will have code and configuration
 the code is same for all environments
 and we can test the code in all possible ways
 configuration -- 2 types -- 
-confidential -- URL's  , variables
-not confidential -- username & password
+non confidential -- URL's  , variables
+confidential -- username & password
 these config will be changed based on environment
 
 next we will see config of nginx
@@ -62,7 +62,7 @@ nginx.yaml
 
 command to execute -- ansible-playbook -i inventory.ini nginx.yaml
 
-remove default ngnix & paste below content & make changes to it accordig to u
+remove default ngnix & paste below content & make changes to it according to u
   
 nginx.conf
 ==========
@@ -198,7 +198,6 @@ open that repo in vsc -- in that create one file -- main.yaml
 
 main.yaml
 =========
----
 - name: roles demo
   hosts: local
   connection: local
@@ -229,7 +228,7 @@ now create instances --
 ansible-playbook -i localhost, -e "instances=['mongodb','catalogue','redis','mysql','user','cart']" roboshop.yaml
 
 lets see ansible configuration
-we can write our own config file instaed of using default ones
+we can write our own config file instead of using default ones
 
 command to see default config file location --
 ansible --version
@@ -243,6 +242,7 @@ we can give ansible config in 4 types
 
 in config we can mention 
 search -- ansible config file git
+in ansible config file , 
 we can mention inventory
 roles directories
 logs location
@@ -279,7 +279,7 @@ output --
 config file = /home/ec2-user/.ansible.cfg
 
 ansible checks for config file in above four places
-the most convinient way is to place ansible.cfg in PWD
+the most convenient way is to place ansible.cfg in PWD
 
 create ansible.cfg in ansible-roboshop-roles
 
@@ -294,7 +294,7 @@ by this u can avoid giving -i inventory.ini on command line
 we can mention log file location like above
 if we give forks=150 it means this ansible-server can connect to 150 servers at a time
 
-push the baove code to git repo 
+push the above code to git repo 
 clone to ansible server
 
 command to execute -- ansible-playbook main.yaml
@@ -309,7 +309,6 @@ roboshop.yaml
 - name: "configure {{ component }} server"
   hosts: "{{ component }}"
   become: yes
-  serial: 3
   roles:
   - "{{ component }}"
 
@@ -427,7 +426,7 @@ vars -- role related variables
 defaults -- we can mention roles in defaults and vars
 
 now lets see catalogue
-create catalogur directory in roles
+create catalogue directory in roles
 ansible-roboshop-roles -- roles -- catalogue -- tasks -- main.yaml
 
 last time we have created files like

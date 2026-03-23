@@ -84,6 +84,342 @@ get the private key access to ansible server
 configure the path in ansible.cfg
 make sure keys are RSA based      ----- 38 mins ansible completed
 
+Terraform
+==========
+terraform is a popular infrastructure as a code tool
+there are alternatives for terraform. they are cloud formation (in AWS) , Arm (in Azure), pulumi
+
+pulumi is a developer related tool & in that we need to write the code
+terraform is very easy when compared to pulumi
+
+advantages of terraform
+=========================
+terraform can connect to multiple clouds , and it can connect to multiple tools
+
+why should we use infra as a code tool??
+
+what are the problems when we create infra manually ?
+1. version control
+
+if we configure applications manually there will be no version control. if there is no version control , u can't have history of our infra
+if we maintain infra manually , if anybody did changes then troubleshooting will become difficult
+
+if we maintain our infra as code, then it will be easy to restore
+if we maintain our infra as code , we can troubleshoot -- we can track who did that & we can review the code changes
+if the code changes are not good , we can always go back to previous versions
+
+2.consistent infra
+
+general problem -- the code works in dev but it does not works in prod
+
+here DEV , UAT , PROD --if we are taking one application in multiple env's -- and we are using same infra in all env's -- if that infra works in dev -- then we can say it will definitely works in prod also
+
+maintaining consistent infra in all environments manually becomes difficult -- but if we use infra as a code -- then we can apply the same code in DEV, UAT, PROD
+
+3. CRUD -- inventory management
+
+if we give one aws account to one person -- we told him to check what services are running in that account -- doing this task is difficult
+the services which are created one hour or one minute before will not be reflected in billing
+
+if we give one aws account -- with only read access -- in that u can only create infra by using terraform code -- by seeing terraform code we can tell what are the services we are running in aws account
+
+by using terraform we can create , read , update , delete the infra by using terraform
+
+4. cost optimisation 
+doing infra creation & update & deletion manually it will takes hours of time 
+
+by using terraform we can do infra creation & update & deletion within minutes
+
+whenever useful we will create infra using terraform (means in working hours) & in non working hours we can delete the infra created in dev & UAT
+
+5. dependency management
+
+to create ec2 instance -- we need security group -- we can manage those dependancies in our code  
+
+6. reusable infra 
+
+whenever we write code -- options required for code reuse are available in tearraform -- terraform modules
+
+now lets see installation of terraform 
+
+search -- install terraform 
+binary download
+windows -- amd64 -- zip file 
+always maintain all the softwares in softwares folder
+unzip the software terraform
+place .exe file in softwares folder
+
+if we give ls in Linux server 
+this ls command comes from /usr/bin/ls (check with command -- which ls)
+
+echo $PATH -- when we give any command -- Linux server checks this command in all paths of output of echo $PATH
+
+when u give command in any os -- it checs paths
+
+in windows also when u give terraform command -- it checks paths where this command is available
+
+we should give the path of terraform.exe path -- to windows 
+
+search -- env -- edit the system environment variables -- environment variables -- system variables -- path -- edit -- new -- give terraform.exe path  -- ok 
+
+if we give path in system variables -- then that will be available for all users in that system
+
+user variables are only useful for a particular user
+
+open gitbash -- terraform version 
+u should see terraform version -- by that u can cofirm terraform is working
+
+terraform setup 
+===============
+we will write terraform code in VSC & we will push that code to git
+
+terraform does not need Linux server , we installed terraform in our windows machine
+from windows machine we can target our infra creation in our AWS account
+but we need authentication , in Linux we have used aws configure
+but from windows to apply infra we need to run aws configure from windows & aws configure comes from aws cli
+search -- aws cli v2 install
+download aws cli v2 -- .msi file
+click next next -- it will be installed
+after that
+open gitbash -- aws configure
+give access key & secret access key & region
+
+when terraform applies infra from VSC -- to ur AWS account 
+it checks the credential from aws configure -- means it checks authentication -- if authentication is success & then it will apply code
+
+1. install terraform
+2. setup path in env variables
+3. install aws-cli
+4. run aws configure
+
+now create one repo in git -- with name -- terraform
+clone that repo to your local machine
+
+providers
+=========
+to what terraform is going to connect is called provider , here our provider is terraform
+terraform can connect to almost every popular tool available 
+search -- terraform -- go through terraform documentation 
+there u can see all tools terraform can connect to
+terraform can connect to on-premise and cloud
+terraform connects to tools using API's
+we can also implement one website and we can write provider for that. if our website or tool becomes popular then we can get support from terraform
+
+open terraform folder in VSC -- 
+terraform -- create ec2 folder -- create one file -- provider.tf
+search -- terraform -- click on AWS -- use provide -- copy code
+
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "6.37.0"  #terraform aws provider version
+    }
+  }
+}
+
+provider "aws" {
+  # Configuration options
+  region = "us-east-1"
+}
+
+
+in aws provider -- we can mention region name 
+here u can mention access key & secret access key also
+but mentioning them in git repo is not safe
+
+create one file -- ec2.tf
+terraform follows syntax of HCL -- Harshicorp Configuration Language
+
+syntax:
+=======
+block_name "type" "name" {
+
+}
+
+for ex we want to create ec2 instance
+resource , data , output, variable, module, terraform etc
+ec2 is a resource
+
+resource "aws_instance" "name-of-the-instance" {
+ key = value
+}
+
+everything is a resource in terraform
+aws_instance -> syntax
+we can't change this name
+but we can change name-of-the-instance -- this is for terraform reference -- we can change it
+
+ami , name , security group , instance type -- are key value pairs
+terraform is developed using go language
+when we execute code of terraform --- in background one function will be called -- for that function we are passing inputs -- 
+
+search -- terraform ec2 instance
+we can see example for creation of instances
+in the end we can see arguments which are available & whether the arguments are optional or mandatory & their description
+
+if we give inputs to function -- it will give outputs to us -- those outputs are called as attributes -- we can see those attributes in attribute reference
+
+after creation of instance we can get instance id , instance_state , public ip , private ip etc
+
+while creating instance give ami_id , instance_type , give some tags to the instance
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = "t3.micro"
+  
+  tags = {
+    Name = "terraform"
+    Project = "roboshop"
+  }
+}
+
+
+
+after writing code , how can u apply & what r the commands to apply
+terraform init -- intialises terraform -- this checks for terraform block -- it understands that we r using aws provider -- then downloads specified version of aws provider
+it creates one hidden folder -- .terraform -- in that we can see terraform-provider-aws_v6.33.0_x5.exe file
+terraform plan -- what terraform plans with our code -- it just shows what will be created with our code
+terraform apply -- to apply or to create resources use terraform apply command
+
+open gitbash --
+cd terraform 
+cd ec2
+
+here where terraform files are available there only u have to give commands
+
+terraform init
+
+terraform plan
+
+terraform apply -auto-approve
+
+instance will be created with name -- terraform
+
+
+we have not mentioned security group in terraform code , so it creates instance with default security group
+
+ami is optional if we mention launch_template . otherwise it is mandatory
+
+instance type is optional if we mention launch_template . otherwise it is mandatory
+
+vpc_security_group_ids -- optional , if we don't mention security group id it will use default sg id
+
+lets see creation of security group
+ingress -- inbound rules
+egress -- outbound rules
+all protocols , all traffic is allowd in inbound & outbound rules
+
+ec2.tf
+=======
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+
+for the first time only we need to execute terraform init
+
+terraform plan
+terraform apply 
+
+sg will be created with name -- allow-all-terraform
+
+to use sg which is created now -- that we want to attach to existing instance
+for that
+vpc_security_group_ids -- is a list -- starts with []
+
+search -- aws security group 
+in that check attribute reference
+id -- id of security group
+to get sg id -- aws_security_group.allow_tls.id
+
+this is called dependency management -- firstly terraform executes ec2 code but it depends on sg , so it creates sg first and then 
+gets id of sg and gives that id to ec2 instance and then creates ec2
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = "terraform-state-demo"
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+by executing this -- terraform plan -- it tells ec2 already exists & sg already exists -- now it will remove already existing sg from instance and attaches newly created sg to the instance
+
+terraform apply -auto-approve
+
+now open aws console -- select instance -- goto security -- check 
+
+to delete the resources using terraform 
+terraform destroy -auto-approve
+
+to check the dependency clearly do 
+terraform apply -auto-approve
+u can see sg will be created first & then creates ec2 instance next
+
+here we learn aws service & we will create those resources manually & then we automate them with  terraform
+in terraform variables , loops , functions are available
+we should know about terraform provider
+
+if we faced any issue -- during practice -- write RC
+(root cause analysis) 
+
+by using reserved keywords -- sometimes we will see warnings or sometimes we can see errors
 
 
 

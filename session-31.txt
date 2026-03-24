@@ -1,0 +1,481 @@
+providers -- to what terraform connects -- aws is one of the provider
+anyone system can be one provider
+terraform init -- downloads the provider
+terraform plan -- plan the infra but it will not create
+terraform apply -- create the infra
+terraform destroy -- destroy the infra
+
+while creating any resource we will pass arguments and in output we will get attributes 
+
+git is for code. provider memory is around 825 MB
+(check in repos -- terraform -- ec2 -- .terraform -- providers -- registry.terraform.io -- hashicorp -- aws -- 6.33.0 -- windows_amd64 -- terraform-provider-aws_v6.33.0._x5.exe)
+git does not allows this and there is no need to store this in git
+so we have to ignore that that
+for that we need to create .gitignore file 
+mention this file name (.terraform) in .gitignore by that git does not adds this file & does not pushes this file
+this provider is in .terraform
+
+now remove the repo and clone it again by using below commands
+rm -rf git
+git init
+git branch -M main
+git remote add origin <URL>
+git add . ; git commit -m "new" ; git push origin main
+
+now create variables repo
+create provider.tf file in that repo
+create variables.tf , ec2.tf files in that repo
+
+in every resource keys are on the left side & values are on the right side
+we cannot change keys
+syntax:
+variable "name_of_variable" {
+   default = ""
+}
+
+in default we can mention the value of specific variable
+now we can call that variable like var.name_of_variable
+variables ami , instance_type are string datatype
+tags datatype is  map 
+security group name & description are strings
+from_port , to_port are of datatype -- number
+cidr_blocks are of list datatype
+sg_tags are of map datatype
+one more datatype is boolean -- called as bool
+
+variables -- ec2.tf
+===================
+resource "aws_instance" "example" {
+  ami           = var.ami_id
+  # if dev t3.micro, otherwise t3.small
+  instance_type = var.instance_type
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = var.ec2_tags
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = var.sg_name
+  description = var.sg_description
+
+  egress {
+    from_port        = var.sg_from_port
+    to_port          = var.sg_to_port
+    protocol         = "-1"
+    cidr_blocks      = var.cidr_blocks
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = var.sg_from_port
+    to_port          = var.sg_to_port
+    protocol         = "-1"
+    cidr_blocks      = var.cidr_blocks
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = var.sg_tags
+}
+
+variables.tf
+============
+variable "ami_id" {
+  type = string  
+  default     = "ami-0220d79f3f480ecf5"
+  description = "RHEL 9 Image"
+}
+
+variable "instance_type" {
+  type = string 
+  default = "t3.micro"
+}
+
+variable "ec2_tags" {
+  type = map
+  default = {
+    Name = "variables-demo"
+    Project = "roboshop"
+    Terraform = "true"
+    Environment = "dev"
+  }
+}
+
+variable "sg_name" {
+  default = "allow-all-terraform-default"
+  type = string
+}
+
+variable "sg_description" {
+  default = "Allow TLS inbound traffic and all outbound traffic"
+}
+
+variable "sg_from_port" {
+  type = number
+  default = 0
+}
+
+variable "sg_to_port" {
+  type = number
+  default = 0
+}
+
+variable "cidr_blocks" {
+  type = list
+  default = ["0.0.0.0/0"]
+}
+
+variable "sg_tags" {
+  type = map
+  default = {
+    Name = "allow-all-terraform"
+    Project = "roboshop"
+    Terraform = "true"
+    Environment = "dev"
+  }
+}
+
+execute above code from variables
+-- cd variables
+-- terraform init
+-- terraform plan
+-- terraform apply -auto-approve
+
+then instance & sg will be created
+
+we can check the syntax errors in terraform file by using command
+-- terraform validate 
+defining type is better for a variable
+
+conditions 
+==========
+expression ? "true-value" : "false-value"
+when expression is true then true-value will run
+when expression is false then false-value will run
+
+in env is dev there is no need to run heavy capacity instances 
+for prod we have to use heavy capacity instances because end users use prod environment
+
+so now create one more variable with name environment 
+environment = prod -- so var.environment == "prod" ? "t3.micro" : "t3.small" is true so instance type will be t3.micro otherwise instance type will be t3.small
+
+conditions -- ec2.tf
+====================
+resource "aws_instance" "example" {
+  ami           = var.ami_id
+  instance_type = var.environment == "prod" ? "t3.micro" : "t3.small"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = var.ec2_tags
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = var.sg_name
+  description = var.sg_description
+
+  egress {
+    from_port        = var.sg_from_port
+    to_port          = var.sg_to_port
+    protocol         = "-1"
+    cidr_blocks      = var.cidr_blocks
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = var.sg_from_port
+    to_port          = var.sg_to_port
+    protocol         = "-1"
+    cidr_blocks      = var.cidr_blocks
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = var.sg_tags
+}
+
+variables.tf
+============
+variable "environment" {
+  default = "prod"
+}
+
+variable "ami_id" {
+  type = string  
+  default     = "ami-0220d79f3f480ecf5"
+  description = "RHEL 9 Image"
+}
+
+variable "instance_type" {
+    type = string 
+    default = "t3.micro"
+}
+
+variable "ec2_tags" {
+  type = map
+  default = {
+    Name = "variables-demo"
+    Project = "roboshop"
+    Terraform = "true"
+    Environment = "dev"
+  }
+}
+
+variable "sg_name" {
+  default = "allow-all-terraform"
+  type = string
+}
+
+variable "sg_description" {
+  default = "Allow TLS inbound traffic and all outbound traffic"
+}
+
+variable "sg_from_port" {
+  type = number
+  default = 0
+}
+
+variable "sg_to_port" {
+  type = number
+  default = 0
+}
+
+variable "cidr_blocks" {
+  type = list
+  default = ["0.0.0.0/0"]
+}
+
+variable "sg_tags" {
+  type = map
+  default = {
+    Name = "allow-all-terraform"
+    Project = "roboshop"
+    Terraform = "true"
+    Environment = "dev"
+  }
+}
+
+execute above code from variables
+-- cd variables
+-- terraform init
+-- terraform plan
+-- terraform apply -auto-approve
+
+the instance will created with instance type -- t3.micro
+
+in variables.tf we have mentioned default values
+there is another way of providing variables i.e terraform.tfvars
+create one file -- terraform.tfvars
+
+terraform.tfvars
+================
+instance_type = "t3.small"
+#sg_name = "allow-all-terraform-tfvars"
+
+variable name should be the same in all places
+for one variable instance_type we have given two different values at 2 different places. in this case value at terraform.tfvars will be picked up
+we can pass variable values in multiple ways
+1. default values inside variables.tf
+2. terraform.tfvars
+3. command line
+4. env variables
+
+terraform env variable syntax
+==============================
+export TF_VAR_<var-name>=<var-value>
+
+unset env variable
+==================
+unset TF_VAR_<var-name>
+
+terraform declaration of variable on command line
+=================================================
+terraform plan -var="<var-name>=<var-value>"
+
+in .gitignore include *.tfvars -- while doing this
+now declare sg_id variable at all places
+priority will be
+1. command line
+2. tfvars
+3. env variable
+4. default values
+so user can override default values on command line or in env or on in tfvars , they can supply their own values without disturbing the code
+
+next we will see loops
+1. count based loop
+2. for each loop
+3. dynamic loop
+
+now we will see count based loop
+for our project we need 
+ec2 instances & r53 records
+we need 10 ec2 instances
+while launching the instance in right side we can see count variable, like that here we can mention count variable to create multiple instances
+to create instances with required names -- create instance list
+and there u can mention names of instances
+to loop through instances list we can use count.index 
+when count.index = 0 then instance will be created with first name i.e mongodb
+so declare Name = var.instances[count.index]
+create new repo -- count 
+
+count -- ec2.tf
+===============
+resource "aws_instance" "example" {
+  count = 10  
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = var.instances[count.index]
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-roboshop" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+variables.tf
+============
+variable "instances" {
+    type = list
+    default = ["mongodb", "redis", "mysql", "rabbitmq", "catalogue", "user", "cart", "shipping", "payment", "frontend"]
+}
+
+# replace with your zone_id and domain_name
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+variable "fruits" {
+    type = list(string)
+    default = ["apple", "banana", "apple", "orange"]
+}
+
+variable "fruits_set" {
+    type = set(string)
+    default = ["apple", "banana", "apple", "orange"]
+}
+
+r53.tf
+======
+resource "aws_route53_record" "www" {
+  count = 10
+  zone_id = var.zone_id
+  # interpolation
+  name    = "${var.instances[count.index]}.${var.domain_name}" # mongodb.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [aws_instance.example[count.index].private_ip]
+}
+
+to create r53 records we need zone_id & name of the record & public ip of instance
+we need to get public ip of instance from output block
+now write code for output block
+syntax:
+=======
+output "name-of-the-output"  {
+  value = 
+}
+
+create one file -- outputs.tf
+outputs.tf
+===========
+output "roboshop_instances" {
+  value       = aws_instance.example
+  description = "description"
+} # to see output created by instances on screen
+
+output "fruits_names" {
+    value = var.fruits
+}
+
+output "fruits_set" {
+    value = var.fruits_set
+}
+
+in output we can see roboshop_instance list , in that we can see details of all instances
+we need private ip of the instances from the output 
+[aws_instance.example[count.index].private_ip]
+aws_instance.example[count.index] = mongodb
+in that private ip is at key private ip
+
+we need to record name like mongodb.sowjanaya.fun -- for that -- write -- var.instances[count.index].var.domain_name
+here . is not a variable path
+here we r mixing two varaibles with one extra character .
+we have to use interpolation now
+give variable names in "${}"
+by seeing them terraform replaces variables with their values
+
+execute above code from count
+-- cd count
+-- terraform init
+-- terraform plan
+-- terraform apply -auto-approve
+
+here in above repo -- instance is dependent on sg , r53 records depends on instances
+so creation flow will be -- sg -- instances -- r53 records
+count based loops works well with lists
+
+next we will see for_each loop
+this works on set
+now create fruits variable
+mention fruits names in list -- then it will be list of strings
+list allows duplicates -- preserves the order
+variable "fruits" {
+    type = list(string)
+    default = ["apple", "banana", "apple", "orange"]
+}
+
+
+to print fruits list -- write code in outputs.tf -- like below
+
+output "fruits_names" {
+    value = var.fruits
+}
+
+output:
+=======
+
+no we will write fruits in the set with name -- set of fruits
+variable "fruits_set" {
+    type = set(string)
+    default = ["apple", "banana", "apple", "orange"]
+}
+
+to print fruits set -- write code in outputs.tf -- like below
+
+output "fruits_set" {
+    value = var.fruits_set
+}
+
+set removes duplicates
+
+output:
+=======
+
+
+for_each loop in ansible require map or set. it does not allows list

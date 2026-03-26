@@ -1,0 +1,642 @@
+let see for each loop
+list -- ordered ,index based values -- allows duplicates
+set -- order not guaranteed , removes duplicates
+
+count based ( or index based) loop -- suitable for list
+for_each -- map or set
+
+for_each loop
+=============
+suits for set or map
+map data type contains key value pairs
+so mention instance name as key and instance type as value
+while iterating through the loop -- terraform gives a special variable -- i.e each
+
+create a repo -- for_each
+copy provider.tf , ec2.tf , variables.tf
+
+variables.tf
+============
+# Map
+/* variable "instances" {
+    type = map
+    default = {
+        mongodb = "t3.micro"
+        mysql = "t3.small"
+        user = "t3.micro"
+        shipping = "t3.small"
+    }
+} */
+
+# This should be converted into set
+variable "instances" {
+    type = list
+    default = ["mongodb", "redis"]
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  #for_each = var.instances
+  for_each = toset(var.instances)
+  ami           = "ami-0220d79f3f480ecf5"
+  #instance_type = each.value
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = each.key
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+r53.tf
+======
+resource "aws_route53_record" "www" {
+  for_each = aws_instance.example
+  zone_id = var.zone_id
+  # interpolation
+  name    = "${each.key}.${var.domain_name}" # mongodb.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [each.value.private_ip]
+  allow_overwrite = true
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = var.zone_id
+  # interpolation
+  name    = "roboshop.${var.domain_name}" # roboshop.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [lookup(aws_instance.example, "frontend").public_ip]
+  allow_overwrite = true
+}
+
+outputs.tf
+==========
+/* output "ec2_output" {
+  value       = aws_instance.example
+}
+ */
+
+to iterate map using for_each assign for_each with ur required variable
+for_each = var.instances
+
+to check the output we have to create r53 records for that we need ec2 output (it will be in map)
+so write output block
+or we can redirect output to json file
+terraform output -json > ec2_output.json -- ec2 output will be stored in file in json format (this stores the output in different way)
+so take the output while creating instances into a file manually
+in that consider mongodb as key and consider everything as value 
+
+in r53 -- by giving allow_overwrite we can overwrite existing records
+
+now create infra -- by using below commands
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+now declare on list variable -- instances
+and we will convert that into set
+set is a like list
+so manually declare instance type
+in name of the instance -- give each.key
+and r53 works as it is
+
+now create infra -- by using below commands
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+dynamic
+========
+while creating security group -- we have ingress & egress blocks 
+in our projects we need to open specific ports on specific ip's -- best practice
+
+create one repo -- dynamic 
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = "terraform"
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  # here ingress is going to be special variable
+  dynamic "ingress" {
+	for_each = var.ingress_rules
+
+   # for_each = toset(var.ingress_rules)
+    content{
+        from_port        = ingress.value.port #ingress.key.port
+        to_port          = ingress.value.port  #ingress.key.port
+        protocol         = "tcp"
+        cidr_blocks      = ingress.value.cidr_blocks #ingress.key.cidr_blocks
+        description = ingress.value.description
+    }
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+variables.tf
+============
+variable "ingress_rules" {
+    default = [
+        {
+            port = 22
+            cidr_blocks = ["0.0.0.0/0"]
+            description = "allowing port number 22 from internet"
+        },
+        {
+            port = 443
+            cidr_blocks = ["0.0.0.0/0"]
+            description = "allowing port number 443 from internet"
+        },
+        {
+            port = 3306
+            cidr_blocks = ["0.0.0.0/0"]
+            description = "allowing port number 3306 from internet"
+        }
+    ]
+}
+
+to open no.of ports individually size of the code increases (we need to write one block of code for one port) and avoid repetition of code , for this terraform created one loop we can keep repetitive code in dynamic 
+dynamic is only for repeated code inside resource
+
+here ingress_rules is a list
+in that we can mention ports related code
+we need to loop ingress_rules
+ingress is a special variable
+by seeing dynamic terraform understands it should loop through 
+so declare ingress_rules variable with for_each loop
+it goes inside ingress_rules -- considers each and every block inside it as value 
+now we can get value.port as port
+value.cidr_block as cidr_block 
+in place of value we can write key here key is same as value
+we can also pass ingress rules as set also
+
+now create infra -- by using below commands
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+creates sg with 3 ingress rules and one egress rule. create sg with different name
+
+while creating ec2 resource -- we are giving inputs (like ami_id , instance_type etc)
+means we are giving inputs to function somewhere
+we can call this as creating API
+we are calling instance create API form provider
+
+data sources
+============
+if u want to get info from provider , we can use data sources
+everytime we are copying ami_id , ami_id changes if any updates are installed then we need to manually change the ami_id in the code or code execution fails
+so we can ask terraform to get ami_id dynamically
+search --  data source ami terraform
+in data source we should mention what we want to query (ami) and resources we want to query 
+
+while manually searching ami's -- devops-practice -- we will get 3 ami's
+but we need only one -- for that we need to give information criteria
+
+even many updates came we keep ami_name as redhat-9-devops-practice so add this as one filter
+same name can be used by others -- so mention owner account id -- as one filter
+check image summary of ami-id -- we can see some parameters there
+we can use all those parameters as filters
+here we r using ebs & hvm filers
+
+now create one repo -- data-sources
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  ami           = data.aws_ami.joindevops.id
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = "terraform"
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+outputs.tf
+==========
+output "ami_id" {   # to see only id
+  value       = data.aws_ami.joindevops.id
+}
+
+output "instance_info" {   # to see all info about instance
+    value = data.aws_instance.terraform_instance
+}
+
+data.tf
+========
+data "aws_ami" "joindevops" {  # to get ami_id by using data source
+  most_recent      = true
+  owners           = ["973714476881"]
+
+  filter {
+    name   = "name"
+    values = ["Redhat-9-DevOps-Practice"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_instance" "terraform_instance" {   # to get instance info using data source
+    instance_id = "i-0e9b37fcfbd0430bb"
+}
+
+now create infra -- by using below commands
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+
+if we give ami name in data source as devops-practice (while manually searching ami's -- devops-practice -- we will get 3 ami's ) -- we will get error -- ur query returned no results . pls change search criteria and try again
+we should give unique criteria
+
+ami = data.aws_ami.joindevops.id
+by this data source places ami-id in ec2 creation dynamically
+by this there is no need to make changes in code if ami_id changes
+
+imagine we created instance manually -- to use this info in terraform -- we need some details from manually created instance -- for this we need to create data source
+
+search -- aws ec2 instance data source terraform
+
+consider that we have terraform instance in ur GUI -- we need to query some info from it
+
+to get single instance details -- use aws_instance 
+keep instance name -- with any name
+by output -- we can see all the info about instance
+from this we can use anything    
+
+functions
+==========
+we cannot write custom functions in terraform. to write custom functions we need to develope our own provider and we need to call them
+
+search -- terraform functions
+numeric function
+================
+windows -- open cmd -- terraform console
+-- max(45,78,12)
+output --  78 
+max is a function that gives max value as output
+-- min(12,45,56,2)
+output -- 2
+min is a function that gives min value as output
+
+string functions
+================
+ends with takes two values -- a string to check and a suffix string. the function returns true if the first string ends with the exact suffix
+syntax-- endswith(string, suffix)
+Examples
+endswith("hello world", "world")
+true
+endswith("hello world", "hello")
+false
+
+join function
+=============
+join produces a string by concatenating all of the elements of the specified list of strings with the specified separator.
+syntax : join(separator, list)
+Examples
+> join("-", ["foo", "bar", "baz"])
+"foo-bar-baz"
+> join(", ", ["foo", "bar", "baz"])
+foo, bar, baz
+
+lower function
+===============
+converts all cased letters in the given string to lowercase.
+Examples
+> lower("HELLO")
+hello
+
+upper function
+===============
+converts all cased letters in the given string to uppercase.
+Examples
+> upper("hello")
+HELLO
+
+split function
+===============
+split produces a list by dividing a given string at all occurrences of a given separator.
+syntax: split(separator, string)
+Examples
+> split(",", "foo,bar,baz")
+[
+  "foo",
+  "bar",
+  "baz",
+]
+
+join function
+=============
+join produces a string by concatenating all of the elements of the specified list of strings with the specified separator.
+join(separator, list)
+Examples
+> join("-", ["foo", "bar", "baz"])
+"foo-bar-baz"
+
+trim function
+=============
+trim removes the specified set of characters from the start and end of the given string.
+syntax: trim(string, str_character_set)
+Every occurrence of a character in the second argument is removed from the start and end of the string specified in the first argument.
+Examples
+> trim("?!hello?!", "!?")
+"hello"
+> trim("foobar", "far")
+"oob"
+
+substr function
+===============
+substr Function
+substr extracts a substring from a given string by offset and (maximum) length.
+syntax: substr(string, offset, length)
+Examples
+> substr("hello world", 1, 4)
+ello
+
+toset Function
+================
+toset converts its argument to a set value.
+
+Explicit type conversions are rarely necessary in Terraform because it will convert types automatically where required. Use the explicit type conversion functions only to normalize types returned in module outputs.
+
+Pass a list value to toset to convert it to a set, which will remove any duplicate elements and discard the ordering of the elements.
+
+Examples
+> toset(["a", "b", "c"])
+[
+  "a",
+  "b",
+  "c",
+]
+
+file Function
+==============
+file reads the contents of a file at the given path and returns them as a string.
+syntax: file(path)
+Examples
+> file("${path.module}/hello.txt")
+Hello World
+
+length Function
+===============
+length determines the length of a given list, map, or string.
+If given a list or map, the result is the number of elements in that collection. If given a string, the result is the number of characters in the string.
+Examples
+> length([])
+0
+> length(["a", "b"])
+2
+
+merge function
+==============
+takes an arbitrary number of maps or objects, and returns a single map or object that contains a merged set of elements from all arguments.
+If more than one given map or object defines the same key or attribute, then the one that is later in the argument sequence takes precedence. If the argument types do not match, the resulting type will be an object matching the type structure of the attributes after the merging rules have been applied.
+
+Examples
+> merge({a="b", c="d"}, {e="f", c="z"})
+{
+  "a" = "b"
+  "c" = "z"
+  "e" = "f"
+}
+
+open terraform folder -- count repo -- in ec2.tf
+we have mentioned count=10
+to pass the length of a variable dynamically we can use count function
+count = length(var.instances)
+
+in variables , we can keep all tags useful for project in common_tags
+and tags useful for only a particular resource -- keep those in resource tags
+mention all tags in the resource related code
+
+create new repo with name -- functions
+provider.tf
+===========
+copy provider here
+
+ec2.tf
+=======
+resource "aws_instance" "example" {
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = merge(
+    var.common_tags,
+    var.ec2_tags
+  )
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = merge(
+    var.common_tags,
+    var.sg_tags
+  )
+}
+
+variables.tf
+============
+variable "common_tags" {
+    default = {
+        Project = "roboshop"
+        Terraform = "true"
+        Environment = "dev"
+    }
+}
+
+variable "ec2_tags" {
+    default = {
+        Name = "functions-demo"
+        Environment = "prod"
+    }
+}
+
+variable "sg_tags" {
+    default = {
+        Name = "functions-demo"
+    }
+}
+
+now we will see r53 records creation for frontend -- roboshop.sowjanya.fun
+we need public ip of frontend
+we have a list with name -- aws_instance.example
+in this list we don't know index of the frontend is
+search -- finding element index in list terraform
+(var.instances, "frontend") -- gives index number
+aws_instance.example[index(var.instances, "frontend")].public_ip -- gets public ip from that index
+
+open count repo -- r53.tf -- in 2nd block of code for creating record for frontend
+r53.tf
+======
+resource "aws_route53_record" "www" {
+  count = 10
+  zone_id = var.zone_id
+  # interpolation
+  name    = "${var.instances[count.index]}.${var.domain_name}" # mongodb.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [aws_instance.example[count.index].private_ip]
+}
+
+# roboshop.daws88s.online -> public_ip
+# As part of functions
+resource "aws_route53_record" "www" {
+  zone_id = var.zone_id
+  # interpolation
+  name    = "roboshop.${var.domain_name}" # roboshop.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [aws_instance.example[index(var.instances, "frontend")].public_ip]
+}
+
+here also , we want to create r53 record for frontend
+here key is frontend -- map is aws_instance.example 
+search -- finding value of a key in a map terraform
+we have to use lookup function -- for this pass map and key 
+lookup(aws_instance.example, "frontend") -- gets all info of frontend -- from that we can get public ip
+
+now open for_each repo -- r53.tf -- in 2nd block of code for creating record for frontend
+r53.tf
+======
+resource "aws_route53_record" "www" {
+  for_each = aws_instance.example
+  zone_id = var.zone_id
+  # interpolation
+  name    = "${each.key}.${var.domain_name}" # mongodb.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [each.value.private_ip]
+  allow_overwrite = true
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = var.zone_id
+  # interpolation
+  name    = "roboshop.${var.domain_name}" # mongodb.daws88s.online
+  type    = "A"
+  ttl     = 1
+  records = [lookup(aws_instance.example, "frontend").public_ip]
+  allow_overwrite = true
+}
+
+
+
+
+
+
+

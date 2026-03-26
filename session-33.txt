@@ -1,0 +1,177 @@
+state
+=====
+terraform stores or tracks what it had created in the state file, it is like memory to terraform
+for this we have 
+.tf files -- desired/declared/expected/asked infra
+infra as a code is declarative
+here declarative means it does not follows the order and whatever u write u will get it and it works based on dependancies and u should follow the syntax
+terraform responsibility is to create infra -- what we have mentioned in tf files
+actual infra -- what is actually created inside provider 
+state -- what terraform created
+desired infra == actual infra -- terraform duty
+open terraform folder -- open ec2 
+in that u can see terraform.tfstate file -- contains what it have created and keeps track with this
+consider upto now, we have not created any resources using ec2 folder and its code
+
+first time
+===========
+declared infra
+actual infra is not created yet
+state is empty
+
+now we have given -- terraform apply
+it checks tf files , actual infra , state
+
+if u have already used ec2 repo -- then delete terraform.tfstate , terraform.tfstate.backup , terraform.lock.hcl
+
+if u give terraform apply -- we have written code to create ec2 ,sg
+-- it checks actual infra -- not created 
+-- state file is empty
+means we r doing this for 1st time
+
+terraform creates the resources in provider and note them in state file
+in state file -- before resources are empty
+now -- we can see 2 resources (sg & instance)
+
+now we have given -- terraform apply again
+it checks .tf files , actual infra , state file
+it refreshes the state  means --
+state file == actual infra
+means what terraform created is not disturbed by anyone
+scans .tf files 
+.tf files == actual infra
+if yes , no changes -- terraform work is done
+if we have done any changes in code (.tf files)
+.tf files != actual infra
+if no, terraform updates contents in .tf files to actual infra 
+
+changes outside of terraform
+============================
+if someone changes -- outside of terraform (means someone changed instance name using console)
+now we have given terraform apply -- it checks .tf files , actual infra , state file
+state file != actual infra
+desired infra != actual infra
+it refreshes the state file and detects someone changed the infra
+if no , then terraform makes desired infra == actual infra
+
+if u give destroy manually or by using terraform -- deletes the infra & updates state file
+state file != actual infra -- true
+desired infra != actual infra -- true
+even if u delete manually -- terraform understands 
+if u give apply -- terraform creates the infra again
+now the instance id changes
+terraform keeps backup of state file when it modifies state file
+now if u give destroy -- deletes the resources in state file & updates state file
+
+terraform always compares actual infra with desired infra with tf files. matching actual infra and desired infra is terraform responsibility
+state is a small database for terraform
+state will be changed continuously
+state file is used by terraform
+tf files are for us
+
+when u give -- terraform apply -- try to open terrafoirm.tfstate -- unable to read terraform.tftstate
+because in this time terraform accesses this file so it locks the state file
+once terraform apply is over -- then u can open terraform.tfstate file
+
+now lets discuss about collaboration environment
+in one env -- roboshop-infra --   consider 3 persons are working and all are writing code
+in aws --that infra will be created
+for 1st person -- we have created infra ( sg , ec2 ) using terraform apply command 
+now 2nd person -- took same code -- given apply command -- now terraform cannot compare state file in 1st person laptop with this tf files
+terraform creates its own state -- with same name we cannot create sg -- throws error
+but we can create ec2 instance with same name
+here there are 2 possibilities -- either errors or duplicates
+
+same with 3rd person -- took same code -- given apply command -- now terraform cannot compare state file in 1st person laptop with this tf files
+terraform creates its own state -- with same name we cannot create sg -- throws error
+but we can create ec2 instance with same name
+here there are 2 possibilities -- either errors or duplicates
+this is not right
+
+solution here is -- to connect with other persons -- we need some central location
+upto now state files are stored at locals
+there should be someone -- connecting each and every laptop -- i.e remote state
+when 1st person -- makes changes -- stores those in central location
+now 2nd person -- applied infra -- it compares those with state file at central location -- says no changes with infra
+same process will be repeated even if we have 50 persons
+
+remote sate
+===========
+so in colloboration env, state should be stored in remote like s3 so that we can prevent errors and duplicates , it should be locked , parallel modifications should not be allowed
+if a person work is actively creating , updating and destroying the state file should be locked
+
+now lets use remote state
+in infra parallel changes are not allowed
+because if one process is running , modifications are under progress , now allowing 2nd person to make changes in the same state file --  there will be lot of confusion -- so terraform blocks modifying state files by multiple persons at one time
+
+s3
+===
+open aws console -- s3 -- create bucket -- bucket name should be universally unique -- in aws
+acls'e enabled
+block all public access
+create bucket 
+
+create one repo -- remote-state -- provider.tf
+in provider.tf only we should tell terraform -- to use state file from s3
+search -- remote state aws terraform with lock -- for lock code -- u can see terraform native locking 
+
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+
+  backend "s3" {
+    bucket  = "remote-state-aws-88s" # Replace with your unique bucket name
+    key     = "remote-state.tfstate"  # name of the state file
+    region  = "us-east-1"
+    encrypt = true
+    use_lockfile   = true  # to lock state file while applying infra
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+when u don't use lock file -- multiple persons can try to access state file -- state file will be corrupted
+
+now run terraform init -- successfully configured the backend s3 terraform will automatically use this backend unless the backend configuration changes
+
+terraform plan 
+terraform apply
+
+now goto s3 -- click on ur s3 bucket -- objects -- remote-state.tfstate.lock
+after applying infra is done -- lock will be released 
+u can see the file -- remote-state.tfstate
+now u can open and u can see the contents of state file    -- 47 mins
+
+note : in terraform where to use [] and where to use ()
+=======================================================
+[] → Used for indexing, lists, and maps
+1. Accessing elements (MOST IMPORTANT)
+
+Use [] when you want to get something from a list or map.
+
+() → Used for functions and expressions
+1. Function calls
+
+Use () when calling a function
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+

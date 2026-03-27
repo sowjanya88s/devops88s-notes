@@ -162,16 +162,276 @@ Use [] when you want to get something from a list or map.
 
 Use () when calling a function
 
+to keep state file secure we should take some predictions
+
+steps to make remote state secure
+=================================
+1. users should not have access to delete except terraform
+2. you should enable versioning in the bucket
+3. data replication in another bucket
+
+data sources , locals , outputs are terraform related topics
+
+locals
+======
+locals are like variables that has extra capabilities
+1. u can refer other variables inside local
+2. values declared inside locals cannot be overridden
+3. u can keep functions & expressions in local
+we should not use the same key for terraform state file
+by giving same key -- infra created from this repo will be stored in the same state file by this problems occurs , so u should not use the same keys
+
+ while refering the variable from locals we should use local.key or local.variable-name 
+if u don't want instance type to be overridden then u can mention it in locals
+we have mentioned common_tags, ec2_tags, sg_tags in variables.tf
+place common_tags in locals because it should not be overridden
+allow ec2_tags to override so place them in variables.tf only
+while creating instance merge common_tags , ec2_tags by using merge function
+lets keep variable related to data source of ami in locals
+create one repo -- locals --
+
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+
+  backend "s3" {
+    bucket  = "remote-state-aws-88s" # Replace with your unique bucket name
+    key     = "locals-demo.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+    use_lockfile   = true
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  ami           = local.ami_id
+  instance_type = local.instance_type
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = local.ec2_final_tags
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+variables.tf
+============
+variable "name" {
+  type        = string
+  default     = "locals"
+}
+
+variable "environment" {
+  type        = string
+  default     = "dev"
+}
+
+/* variable "instance_name" {
+    type = string
+    default = "${var.name}-${var.environment}" # locals-dev
+} */  # this block of code throws errrors because we can't use one variable in another variable , so mention it in locals
 
 
+variable "ec2_tags" {
+    default = {
+        Name = "locals-demo"
+        Environment = "prod"
+    }
+}
 
+variable "sg_tags" {
+    default = {
+        Name = "locals-demo"
+    }
+}
 
+locals.tf
+=========
+locals {
+    instance_name = "${var.name}-${var.environment}"
+    instance_type = "t3.micro"
+    common_tags = {
+        Project = "roboshop"
+        Terraform = "true"
+        Environment = "dev"
+    }
+    ec2_final_tags = merge(local.common_tags, var.ec2_tags )
+    ami_id = data.aws_ami.joindevops.id
+}
 
+provisioners
+============
+there are two types of provisioners
+1. local-exec -- where terraform executes (for ex: now we r running terraform in windows , so windows is local because we are executing terraform commands in windows only)
+2. remote-exec -- executes inside the resources created by terraform
 
+if we want to take some actions or to run some scripts we can use terraform
 
+provisioners will be executed at the time of destroy or creation but not at the time of updating  resources
 
+if we don't specified when to run provisioners -- they will run at the time of creation
 
+if we specified to run provisioners at the time of destroy -- they will run before destroying resources 
 
+so u can mention multiple provisioners at the time of creation or destroy resources and they will be executed in order
 
+for ex: after creation of ec2 instance, we can write ip of created ec2 instance in inventory file (creates inventory.ini at that time)
+in provisioner we can use self variable , self is the special variable
+after terraform apply -- u can see ip in inventory
+by this we can handover to ansible for configuring or we can run scripts or commands
+provisioners will not applied at update time
+when u throw error by using provisioner -- terraform stops execution there -- terraform apply fails
+on_failure = continue -- terraform ignores the errors in provisioners
+when error comes -- terraform deletes the previous resources -- creates them once again
+
+lets see remote-exec
+by using this we can connect to resources and can run some commands inside it
+for that we should connect to instance -- for that we should write connection block -- in taht write protocol name , username , password , public-ip
+by using inline block -- commands mentioned in that will be executed one by one
+while running remote-exec -- terraform take connection block ans connects to instance -- then executes nginx install ans nginx start commands
+we use these provisioners to execute ansible playbooks 
+
+before destroying instance stop the service of nginx to avoid errors by that it does note accepts new requests
+
+create one repo -- provisioners 
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+ec2.tf
+=======
+resource "aws_instance" "example" {
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  # self is the special variable
+  provisioner "local-exec" {
+    command = "echo ${self.public_ip} > inventory.ini"
+  }
+
+  provisioner "local-exec" {
+    command = "exit 1"  #throwing error
+    on_failure = continue  #continue after error
+  }
+
+  provisioner "local-exec" {
+    command = "echo script-2"
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "echo 'Deleting the instance'"
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "echo > inventory.ini"  # emptying public ip in inventory file
+  }
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    password = "DevOps321"
+    host     = self.public_ip
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo dnf install nginx -y",
+      "sudo systemctl start nginx"
+    ]
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo systemctl stop nginx"
+    ]
+    when = destroy
+  }
+
+  tags = {
+    Name = "provisioners-demo"
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+note:
+=====
+use
+interpreter = ["bash", "-c"] in local-exec if commands are not executed properly. like below
  
-
+provisioner "local-exec" {
+  interpreter = ["bash", "-c"]
+  command     = "echo ${self.public_ip} > inventory.ini"
+}

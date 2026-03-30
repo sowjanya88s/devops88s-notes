@@ -1,0 +1,347 @@
+terraform ec2 module creation -- continuation
+=============================================
+syntax 
+module "name_of_module" {
+source = "gitrepo"
+}
+we will pass values of variables from module
+
+terraform naming convention:
+============================
+name_of_module --  use for programs -- in resource names,data sources,variable names, outputs etc
+prefer to use lower case letters and numbers in resource names
+
+name-of-module --  use for humans exposure
+
+resource "aws_instance" "catalogue_instance" {
+}
+here catalogue_instance is instance type
+we can just call it as catalogue , by that everybody can understand that catalogue is an ec2 instance
+
+resource name should be named as this if there is no more descriptive and general names available or if there is only one resource name it as this/main
+
+main -- where program starts executing
+data sources , output is called as supporting code
+always use singular nouns for names
+
+list of sg_id -- call as -- sg_ids
+1 resource -- singular
+multiple/list -- plural
+
+use - inside arguments values and in places where value will be exposed to a human 
+
+for_each & count should be declared at the beginning
+tags should be mentioned at the end of code
+
+now lets implement ec2 
+here we are creating only ec2 instance so name it as this
+sg_id is alist call it as sg_ids , while mentioning its data type use list(string)
+tags is optional and it is map data type , if we mention default = {}  -- then it is optional
+
+now create one more repo -- terraform-aws-instance
+
+terraform-aws-instance -- ec2.tf
+=================================
+resource "aws_instance" "this" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+  vpc_security_group_ids = var.sg_ids
+
+  tags = local.ec2_final_tags
+}
+
+locals.tf
+=========
+locals {
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+    ec2_final_tags = merge(
+        local.common_tags,
+        var.tags
+    )
+}
+
+variables.tf
+============
+variable "project" {
+    type = string
+}
+
+variable "environment" {
+    type = string
+}
+
+variable "ami_id" {
+    type = string
+}
+
+variable "instance_type" {
+    default = "t3.micro"
+}
+
+variable "sg_ids" {
+    type = list(string)
+}
+
+# Empty, means optional
+variable "tags" {
+    type = map
+    default = {}
+}
+
+readme.md
+=========
+# Terraform AWS Instance
+
+outputs.tf
+==========
+output "instance_id" {
+  value       = aws_instance.this.id
+}
+
+output "public_ip" {
+    value = aws_instance.this.public_ip
+}
+
+output "private_ip" {
+    value = aws_instance.this.private_ip
+}
+
+This module creates EC2 instance in AWS.
+
+## Inputs
+* project - (Required) string type, user must provide project name ex. roboshop, expense, etc.
+* environment - (Required) string type, user must provide environment ex. dev, uat, prod, etc.
+* ami_id - (Required) string type, user must provide ami_id of the instance.
+* instance_type - (Optional) string type, default value is t3.micro. Users can override.
+* sg_ids - (Required) list of string, users must provide list of security group ids instance should have.
+* tags - (Optional) map type, user can provide the tags they want to have.
+
+## Outputs
+* instance_id - ID of the instance created
+* public_ip - Public IP of the instance created
+* private_ip - Private IP of the instance created
+
+upto now , we have developed module , we have to provide documentation
+if we don't mention default values for vriables consider them as required otherwise they are optional
+outputs are also important. so write output for instance id , public ip , private ip
+
+now create one more repo -- ec2-module-test
+
+ec2-module-test -- ec2.tf
+=========================
+module "ec2" {
+    source = "../terraform-aws-instance"
+    #project = "roboshop"
+    project = var.project_name
+    environment = var.env
+    ami_id = data.aws_ami.joindevops.id
+    sg_ids = var.sg_ids
+    instance_type = "t3.large"
+    tags = {
+        Name = "${var.project_name}-${var.env}-${var.component}"
+        Component = var.component
+    }
+}
+
+or
+ 
+module "ec2" {
+    source = "../terraform-aws-instance"
+    project = "roboshop"
+    environment = "dev"
+    ami_id = "ami-0220d79f3f480ecf5"
+    sg_ids = ["sg-076ec9ad23dab2b28"]
+    instance_type = "t3.large"
+    tags = {
+        Name = "roboshop-dev-catalogue"
+    }
+}
+
+data.tf
+=======
+data "aws_ami" "joindevops" {
+  most_recent      = true
+  owners           = ["973714476881"]
+
+  filter {
+    name   = "name"
+    values = ["Redhat-9-DevOps-Practice"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+variables.tf
+============
+variable "project_name" {
+    default = "roboshop"
+}
+
+variable "env" {
+    default = "dev"
+}
+
+variable "sg_ids" {
+    default = ["sg-076ec9ad23dab2b28"]
+}
+
+variable "component" {
+    default = "catalogue"
+}
+
+either u can mention variable values in module or u can use variables.tf file to provide variable values
+if u mention variable values in variables.tf -- then in module refer them with variable names in variables.tf
+while creating instance we can use data source for ami_id
+
+open gitbash --
+cd ec2-module-test
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+next we will see creation of module for vpc
+vpc -- virtual private cloud
+============================= 
+virtual private cloud is like a data centre where we can create resources to our project in an isolated space (no one can access this except one project). it is completely in our control
+
+
+if there is no cloud , how servers will be created 
+in on-premise -- there will be one data centre , it contains some network connection , it contains cooling and power , it contains subnets and servers
+if the data centre is placed in cloud that is known as Virtual private cloud 
+
+in our roboshop project -- frontend is publicly accessible -- so we can keep it in public subnet
+backend & database -- are private -- we have to place them in private network
+
+subnets -- we create partitions in our network for maintenance and security. if not secure or end users connect directly then it is public subnet. if secure like backend or db then it is private subnet
+subnet is like a partition
+
+to provide high availability we will create subnets in min 2 az's
+internet gateway/modem -- through this only we can connect to subnets in vpc
+ 
+form internet gatway -- we will create route tables & routes for public & private subnets
+there wil be public route tables & routes for public subnet
+there wil be private route tables & routes for private subnet
+
+CIDR -- classless inter domain routing
+
+IP address -- its a 32 bits binary operating system
+
+in previous days -- unary -- 1
+binary -- contains -- 0,1 --> 2
+decimal -- contains -- 0 1 2 3 4 5 6 7 8 9 --> 10
+
+lets take one number -- 168
+8 -- based on place its value changes
+8 -> 8*10^0 = 8
+6 -> 6*10^1 = 60
+1 -> 1*10^2 = 100
+total -- 168
+
+ip address -- 32 bits -- divided ino 4 parts -- each part contains 8 bits (octate)
+
+for ex: ip -- 192.168.145.132
+convertion of 192 into decimal
+
+128  64   32  16 8  4  2  1
+7     6   5   4  3  2  1  0
+=     =   =   =  =  =  =  =
+1     1   0   0  0  0  0  0
+
+
+= 0*2^0 + 0*2^1 + 0*2^2 + 0*2^3 + 0*2^4 + 0*2^5 + 1*2^6 + 1*2^7 = 192
+
+192.168.145.132 -- 11000000 + 10101000 + 10010001 + 10000100
+
+max ip address -- 1's in all places -- 255
+
+0.0.0.0
+.
+.
+. 
+255.255.255.255
+
+for 1 bit -- 2 possibilities -- 0 & 1 -- formula -- 2^0 -- 1
+for 2 bits -- 4 possibilities -- 00 & 01 & 10 & 11 -- formula -- 2^2 -- 4
+
+for 32 bits -- 2^32 = 4.29 billion public ip addresses or 429 crores public  ip addresses are possible
+
+any electronic devices contains ip addresses
+ip addresses are getting exhausted -- in future ipv6 will come
+upto now to overcome ip address exhausts issue -- we r using NAT concept
+NAT -- Network Address translation
+for every home -- there will be 1 public ip address -- we r giving it to modem -- so modem can handle private ip addresses -- all laptops & mobiles in our home will be considered as one -- by that ip's are not exhausted
+
+ip address -- contains Network + hosts
+
+10.0.0.0/16 -- 16 bits are reserved for network + 16 bits are reserved for host/server
+2^16 -- 65536 ip addresses possible
+we can't do anything with network bits
+so we can create 65536 servers
+
+10.0.0.0/24 -- 24 bits are reserved for network + 8 bits are reserved for host/server
+2^8 -- 256 ip addresses possible
+so we can create 256 servers
+
+for ex: for our house -- modem -- 192.168.1.0/24 -- 256 devices can be connected to modem
+
+ip address will be like
+192.168.1.0 -- given to modem
+192.168.1.1
+192.168.1.2
+.
+.
+.
+.
+192.168.1.255
+
+while creating network using vpc in aws -- we should give some CIDR -- aws gives max 16 to 28 range CIDR
+
+any company is not using more than 65536 in a single network
+AI's are maintaining  servers in multiple networks
+
+10.0.0.0/16 -- vpc CIDR -- range of ip's
+10.0.0.0/24 -- 8 bits for subnets -- 256 subnets -- each subnet can have 2^8  (256) ip addresses
+
+subnets will be like --
+10.0.0.0/24
+10.0.1.0/24
+10.0.2.0/24
+10.0.3.0/24
+.
+.
+.
+.
+10.0.255.0/24
+
+
+
+
+
+

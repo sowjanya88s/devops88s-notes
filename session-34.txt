@@ -1,0 +1,499 @@
+by using terraform we can create infra in multiple environments
+there are 3 ways
+1. workspaces
+2. tfvars
+3. seperate repos
+
+workspace
+=========
+if we want to create multiple environments we can make use of terraform workspaces. we can make use of special variable called terraform.workspace
+
+create repo -- terraform-multienv
+in that create one more repo -- workspace --
+in that create files -- provider.tf , ec2.tf , data.tf , count.tf , variables.tf , locals.tf
+
+provider.tf
+============
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+
+  backend "s3" {
+    bucket  = "remote-state-aws-88s" # Replace with your unique
+    key     = "remote-state.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+    use_lockfile   = true
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+
+open gitbash 
+goto terraform -- terraform-multienv -- workspace 
+execute below commands --
+cd workspace/
+
+terraform workspace --help
+u can see subcommands of terraform
+
+terraform init
+terraform workspace list
+* default
+we have only one workspace called default
+
+lets see creation of workspace with name dev
+terraform workspace new dev
+
+terraform workspace list
+*dev
+now we r in dev workspace
+terraform.workspace = dev
+
+we can create one workspace for one env
+
+ec2.tf
+======
+resource "aws_instance" "example" {
+  ami           = local.ami_id
+  instance_type = lookup(var.instance_type, local.environment)
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = "${var.project}-${local.environment}"
+    Project = "roboshop"
+    Environment = local.environment
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform-${local.environment}" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform-${local.environment}" #roboshop-dev
+  }
+}
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "instance_type" {
+    default = {
+        dev = "t3.micro"
+        uat = "t3.small"
+        prod = "t3.medium"
+    }
+}
+
+data.tf
+=======
+data "aws_ami" "joindevops" {
+  most_recent      = true
+  owners           = ["973714476881"]
+
+  filter {
+    name   = "name"
+    values = ["Redhat-9-DevOps-Practice"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+locals.tf
+==========
+locals {
+  ami_id = data.aws_ami.joindevops.id
+  environment = terraform.workspace  #dev (because now we r in dev)
+}
+ 
+here our goal is to create same infra ( i.e called consistent env) for multiple env's by using the same code
+by treating different env's differently we will get different types of errors (for ex: the code worked in dev will not work in prod)
+and in variables we want to use different instance types for different environments
+we r giving it as map where key is env name & value is instance type
+use lookup function -- pass map and key then we can get value
+like this lookup(var.instance_type, local.environment)
+now we r in dev so  local.environment = dev and its value is t3.micro -- so instance will be created with t3.micro as its instance type
+
+now open gitbash --
+terraform plan 
+u can see instance with name roboshop-dev as type t3.micro
+
+now create prod workspace
+terraform workspace new prod
+terraform workpsace list 
+*prod
+terraform plan
+u can see instance with name roboshop-prod as type t3.medium
+
+by using terraform.workspace variable we can control the values
+
+we can't use the same state file for different env's
+it created env folder inside s3 bucket -- there created folders with env names -- placed state files inside it
+got aws console -- open ur s3 bucket -- env folder -- prod -- remote-state.tfstate
+env folder --dev -- remote-state.tfstate
+folder is different -- no problem
+here we have used terraform.workspace variable -- so it created env folder -- inside it -- created two folders -- dev & prod
+otherwise it does not creates
+terraform handles it in the background
+
+advantages
+==========
+1. same code 
+2. consistent environments
+
+disadvantages
+==============
+1. since code is same , we should be very careful , because it applies to prod also 
+(whenever u did changes in code the same will be applied to prod) 
+
+in real time , dev-env is completely isolated from prod-env
+because prod-env is secure , even with small changes there will be huge effect
+
+tfvars
+======
+create one repo in terraform-multienv -- tfvars
+in that create files -- variables.tf , ec2.tf , provider.tf
+in variables.tf don't mention variable values
+mention variable values in respective env -- terraform.tfvars
+
+in provider.tf -- don't write backend block of code there
+in tfvars -- create two folders -- dev & prod
+dev -- create files -- backend.tf , terraform.tfvars
+
+tfvars -- provider.tf
+=====================
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+
+  backend "s3" {
+    
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+tfvars -- ec2.tf 
+================
+resource "aws_instance" "example" {
+  ami           = "ami-0220d79f3f480ecf5"
+  instance_type = var.instance_type
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = "terraform-state-demo-${var.environment}"
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform-${var.environment}" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform-${var.environment}"
+  }
+}
+
+
+tfvars -- variables.tf
+======================
+variable "instance_type" {
+    type = string
+}
+
+variable "environment" {
+    type = string
+}
+
+for different env's we have used different s3 buckets to save state files
+
+dev -- backend.tf
+=================
+bucket  = "remote-state-aws-88s-dev" # Replace with your unique bucket name
+key     = "remote-state.tfstate"
+region  = "us-east-1"
+encrypt = true
+use_lockfile   = true
+
+dev -- terraform.tfvars
+=======================
+environment = "dev"
+instance_type = "t3.micro"
+
+prod -- backend.tf
+===================
+bucket  = "remote-state-aws-88s-prod" # Replace with your unique bucket name
+key     = "remote-state.tfstate"
+region  = "us-east-1"
+encrypt = true
+use_lockfile   = true
+
+prod -- terraform.tfvars
+========================
+environment = "dev"
+instance_type = "t3.micro"
+
+in terraform.tfvars -- mention the variables what u want to define
+
+commands to execute tfvars folders
+cd tfvars
+for dev env
+terraform init -backend-config=dev/backend.tf
+terraform plan -var-file=dev/terraform.tfvars
+terraform apply -auto-approve -var-file=dev/terraform.tfvars
+
+terraform destroy -auto-approve -var-file=prod/terraform.tfvars
+
+
+for prod env
+terraform init -reconfigure -backend-config=prod/backend.tf
+terraform plan -var-file=prod/terraform.tfvars
+terraform apply -auto-approve -var-file=prod/terraform.tfvars
+
+terraform destroy -auto-approve -var-file=prod/terraform.tfvars
+
+
+
+here we r just controlling values
+variable precedence
+===================
+1. command line
+2. tfvars
+3. env variables
+4. default values
+5. using prompt
+
+in tfvars -- variables.tf -- we have not mentioned variable values
+so we have passed variable file name on command line -- gets variable values from that file
+ 
+if u configured resources on prod first and then moved to dev later then u should use reconfigure option with terraform init
+
+advantages
+===========
+1. same code 
+2. consistent environments
+
+disadvantages
+==============
+1. since code is same , we should be very careful , because it applies to prod also 
+(whenever u did changes in code the same will be applied to prod) 
+
+in real time , dev-env is completely isolated from prod-env
+because prod-env is secure , even with small changes there will be huge effect and blast chances are high
+
+if we r in dev by mistake we have applied prod -- blast chances are high
+
+there should be isolation for each an every env with other
+for this we have to maintain different accounts for different env's
+each time we have to give
+aws configure
+use terraform workspace or configure 
+
+actually workspace or tfvars are not used in big MNC's
+only small companies use workspace or tfvars approach
+
+separate repos
+==============
+we have to create separate repos for each env like terraform-ec2-dev , terraform-ec2-prod
+maintain separate buckets
+
+disadvantages
+=============
+repetitive code
+
+advantages
+==========
+clear isolation
+blast radius is zero
+separate states
+
+to avoid this advantage(i.e repetitive code) -- we have concept called -- terraform modules
+we can use CICD tools to reduce human errors here
+
+terraform modules 
+=================
+we will extract the common code and we make use of it 
+
+functions --> a repeated task , it will be executed whenever we call . it will take inputs and gives outputs
+
+we have 2 scripts -- a.sh and common.sh
+a.sh -> called common.sh
+here control is with a.sh
+
+who developes ec2 module -- they r called as module developers
+who uses modules -- module users
+consider we have ec2 module (main code is here) (central place) -- we r developing a project roboshop-catalogue-ec2 -- we call ec2 module code
+next we have to develope a new project -- roboshop-cart-ec2 -- we have to call ec2 module code
+while using central module we have to pass inputs 
+so we have to implement standards in ec2 module (because we r using ec2 module everytime) -- by that automatically applies everywhere
+by maintaining  central place -- updates and maintenance is easy
+
+advantages
+===========
+1.enforce best standards
+3.code reuse
+3.easy maintenance
+
+here terraform-aws-instance repo is only for code reuse , so don't write provider here
+create one repo -- terraform-aws-instance
+in terraform-aws-instance repo -- create variables.tf , ec2.tf files
+
+terraform-aws-instance repo -- variables.tf
+===========================================
+variable "ami_id" {
+    type = string
+}
+
+variable "instance_type" {
+    default = "t3.micro"
+}
+
+terraform-aws-instance repo -- ec2.tf
+=====================================
+resource "aws_instance" "example" {
+ ami_id            = var.ami_id
+  instance_type = var.instance_type
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+
+  tags = {
+    Name = "terraform-state-demo"
+    Project = "roboshop"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow-all-terraform" # this is for AWS account
+  description = "Allow TLS inbound traffic and all outbound traffic"
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "allow-all-terraform"
+  }
+}
+
+now create one repo -- ec2-module-test
+in ec2-module-test -- create file -- ec2.tf , provider.tf
+in module we r setting values for variables
+write provider here
+
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+
+  backend "s3" {
+    bucket  = "remote-state-aws-88s" # Replace with your unique bucket name
+    key     = "remote-state.tfstate"
+    region  = "us-east-1"
+    encrypt = true
+    use_lockfile   = true
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+ec2.tf
+======
+module "ec2" {
+source = "../terraform-aws-instance"
+instance_type = "t3.large"
+ami_id = "ami-0220d79f3f480ecf5"
+}
+
+open gitbash --
+cd ec2-module-test
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+organizations maintain modules for each and every resource
+with the help of documentation we can create resources by using the modules
+
+
+
+
+
+
+
+
+

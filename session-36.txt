@@ -1,0 +1,359 @@
+vpc creation in aws
+===================
+goto aws console -- vpc 
+aws creates default vpc & default subnets (one default subnet for one region) in every region
+
+create vpc -- 
+resources to create -- vpc
+name -- roboshop
+subnet range -- 10.0.0.0/16
+no ipv6
+tenancy -- default (underlinked hardware is shared one)
+vpc encryption control - no
+create vpc
+
+internet gateway -- create 
+name -- roboshop
+create internet gateway
+after creation , attach internet gateway to vpc
+attach to vpc -- select ur vpc -- attach
+
+we want to create subnets in 2 az's to provide high availability -- us-east-1a & us-east-1b
+in public subnet we will launch frontend instances
+public subnet -- roboshop-public-us-east-1a -- 10.0.1.0/24  
+& roboshop-public-us-east-1b 10.0.2.0/24
+
+in private subnet we will launch backend instances
+private subnet -- roboshop-private-us-east-1a -- 10.0.11.0/24  
+& roboshop-private-us-east-1b 10.0.12.0/24
+
+
+in database subnet we will launch database instances
+database subnet -- roboshop-database-us-east-1a -- 10.0.21.0/24  
+& roboshop-database-us-east-1b 10.0.22.0/24
+
+
+subnets -- create subnet
+vpc id -- select ur vpc
+subnet name --  roboshop-public-us-east-1a
+cidr -- 10.0.1.0/24 -- in this subnet we can get 256 ip addresses
+az -- us-east-1a
+
+add new subnet
+subnet name --  roboshop-public-us-east-1b
+cidr -- 10.0.2.0/24 -- in this subnet we can get 256 ip addresses
+az -- us-east-1b
+
+vpc id -- select ur vpc
+subnet name --  roboshop-private-us-east-1a
+cidr -- 10.0.11.0/24 -- in this subnet we can get 256 ip addresses
+az -- us-east-1a
+
+add new subnet
+subnet name --  roboshop-private-us-east-1b
+cidr -- 10.0.12.0/24 -- in this subnet we can get 256 ip addresses
+az -- us-east-1b
+
+vpc id -- select ur vpc
+subnet name --  roboshop-database-us-east-1a
+cidr -- 10.0.21.0/24 -- in this subnet we can get 256 ip addresses
+az -- us-east-1a
+
+
+add new subnet
+subnet name --  roboshop-database-us-east-1b
+cidr -- 10.0.22.0/24 -- in this subnet we can get 256 ip addresses
+az -- us-east-1b
+
+create subnet
+
+why we have used 10 series?
+private ip address ranges -- internet authorities reserved some ip's for private ip addresses. we have to use them as private ip addresses. they are -- 
+class A -- 10.0.0.0 to 10.255.255.255 (10.0.0.0/8)
+class B -- 172.16.0.0 to 172.31.255.255 (172.16.0.0/12)
+class C -- 192.168.0.0 to 192.168.255.255 (192.168.0.0/16)
+
+lets see creation of route tables
+route tables -- create route table -- name -- roboshop-public -- select ur vpc -- create 
+below route table -- subnet associations - edit subnet associations -- 
+-- select roboshop-public-us-east-1a & roboshop-public-us-east-1b 
+-- save associations 
+we have to write entries
+by default vpc cidr will be added for local routes
+
+internet notation -- 0.0.0.0
+public subnet -- edit routes -- 
+destination -- 0.0.0.0 
+target -- select internet gateway -- save changes
+that means ur public subnets have route to the internet through internet gateway
+
+route tables -- create route table -- name -- roboshop-private -- select ur vpc -- create 
+below route table -- subnet associations - edit subnet associations -- 
+private route table
+-- associate roboshop-private-us-east-1a & roboshop-private-us-east-1b
+
+route tables -- create route table -- name -- roboshop-database -- select ur vpc -- create 
+below route table -- subnet associations - edit subnet associations -- 
+database route table
+-- associate roboshop-database-us-east-1a & roboshop-database-us-east-1b
+for private & database route tables -- don't give route to internet
+
+for instances in public subnet -- public ip will be there
+for instances in private & databse subnets -- we don't enable public ip addresses -- means nobody can reach out to u
+
+subnets which have access to internet route are called public subnets
+subnets which does not have access to internet route are called private subnets
+
+we will create backend instance in private subnet
+we will create database instances in database subnets
+there will be two types of traffic
+inbound -- ingress -- incoming traffic --
+outbound -- egress -- outgoing traffic (traffic/data goes out from vpc/servers)
+if we give --  yum install mysql-server -y -- in db server
+we r going to reach repos -- means it is outgoing traffic -- traffic originated from the server
+we have not given internet to private & database subnets
+to install some packages & to update packages -- outgoing traffic -- we are aware
+for that we have to use NAT (network address translation) gateway
+we have to create NAT gateway in public subnet -- it takes outgoing traffic to internet
+NAT does not allows inbound traffic
+in background , NAT gateway is an ec2 instance so it contains one ip address
+if some problem comes in aws -- aws restarts ec2 instance
+when it is restarted public ip address will be changed -- ip address changes is a problem
+to avoid this , use elastic ip service -- also called as static ip address
+static ip is mandatory to create nat gateway
+for this static ip there will be some charges -- 5$
+
+amazon has purchased 130 millions of ip addresses
+elastic ip addresses -- allocate elastic ip address -- network border group -- us-east-1 (az) -- create 
+it allocate one ip for us -- we can attach this to anyone
+
+NAT gateways -- create NAT gateway --
+name -- roboshop
+availability mode -- zonal
+vpc -- roboshop
+connectivity type -- public
+method of EIP allocation -- manual -- select az -- us-east-1a
+elastic ip allocation id -- select ur eip
+-- create NAT gateway
+
+creation of nat gateway takes 2 mins of time -- because in background it creates ec2 instance ( u don't have control on background ec2 instance)
+so eip allocation method is mandatory
+if we keep availability mode as regional -- it will creates two NAT gateway's in 2 public subnets -- so there will be double charges
+
+goto subnets -- we have to write route to NAT gateway
+open private route table -- 
+destination -- 0.0.0.0 
+target -- select NAT gateway -- save changes
+
+open databse route table -- 
+destination -- 0.0.0.0 
+target -- select NAT gateway -- save changes
+
+NAT is only for outgoing traffic
+
+now we will see development of  module for vpc
+where we mention details of vpc are known as vpc based resources
+subnets , igw , routetables , NAT are vpc based resources
+
+create repo -- terraform-aws-vpc -- for module development (to place common code)
+create repo -- vpc-module-test -- for testing vpc code
+
+steps:
+create vpc
+create internet gateway
+create subnets -- 2 public subnets in 2az's , 2 private subnets in 2az's , 2 database subnets in 2az's
+
+search -- aws vpc terraform
+
+we r creating one vpc .. so refer it as main
+cidr is user's decision .. give default -- user can override if he wants
+enable_dns_support -- defaults to true -- no need to give
+enable_dns_hostnames -- defaults to false -- give it as true
+by this ec2.internal naming comes
+in companies , while creating one resource we have to mention project name , env name in that resource name or common tags
+create one variable vpc-tags -- leave its default value as empty
+while creating resource tags -- merge those common_tags , Name of the resource , vpc tags or resource related tags
+
+search -- aws internet gateway
+mention vpc_id in it
+give tags for it
+
+vpc-module-test -- contains one folder -- .terraform -- contains vpc folder -- here module code will be saved
+but now we have updated module code
+to get recently updated code here --
+open gitbash --
+terraform  get -update
+
+then give terraform apply command in vpc-test repo 
+
+in companies module developers sends mail to all module users -- that the module code is updated
+then u have to get updated code -- terraform  get -update (by this command)
+
+now we have to create subnets in vpc
+search -- aws subnet terraform
+copy subnet code from there
+we need two subnets in 2 different az's -- use count here
+we need to mention default subnet cidr's in variables
+if user wants he can override in vpc-test
+while refering use count.index variable
+if we don't mention az's it takes az names randomly
+so check az names in region where u have created vpc
+in provider we have mentioned region name as us-east-1 -- so it creates all resources in us-east-1 only
+by using data source we can get all az's in region
+and print az's by using output command
+from that u can pick two az's
+with output block -- we can see names of az's in names list
+az_names = slice(data.aws_availability_zones.available.names, 0, 2)
+use slice function to get first 2az's names from list
+in slice function -- start index is inclusive & end index is exclusive -- so write 0,2 -- to get first 2 az's names
+to provide public ip's for instances created in public subnet use below line -- map_public_ip_on_launch = true
+
+we need to catch the output of az's in vpc-test also
+so write outputs.tf in vpc-test also
+in value of output write module.vpc.azs_info
+module name -- vpc
+output block name -- azs_info in terraform-vpc-module
+
+
+terraform-aws-vpc -- main.tf
+============================
+resource "aws_vpc" "main" {
+  cidr_block       = var.vpc_cidr
+  instance_tenancy = "default"
+  enable_dns_hostnames = true
+
+  tags = local.vpc_final_tags
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id # VPC association
+
+  tags = local.igw_final_tags
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count = length(var.public_subnet_cidrs)
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.public_subnet_cidrs[count.index]
+  availability_zone = local.az_names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-public-us-east-1a
+        {
+            Name = "${var.project}-${var.environment}-public-${local.az_names[count.index]}"
+        },
+        var.public_subnet_tags
+    )
+}
+
+data.tf
+=======
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+locals.tf
+==========
+locals {
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+    vpc_final_tags = merge(
+        local.common_tags,
+        {
+            Name = "${var.project}-${var.environment}"
+        },
+        var.vpc_tags
+    )
+    igw_final_tags = merge(
+        local.common_tags,
+        {
+            Name = "${var.project}-${var.environment}"
+        },
+        var.igw_tags
+    )
+    az_names = slice(data.aws_availability_zones.available.names, 0, 2)
+    
+}
+
+variables.tf
+============
+variable "project" {
+    type = string
+}
+
+variable "environment" {
+    type = string
+    validation {
+        condition     = contains(["dev", "qa", "uat", "prod"], var.environment)
+        error_message = "Environments should be one of dev, qa, uat or prod"
+    }
+}
+
+variable "vpc_cidr" {
+    type = string
+    default = "10.0.0.0/16"
+}
+
+variable "vpc_tags" {
+    type = map
+    default = {}
+}
+
+variable "igw_tags" {
+    type = map
+    default = {}
+}
+
+variable "public_subnet_cidrs" {
+    type = list
+    default = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "public_subnet_tags" {
+    default = {}
+    type = map
+}
+
+always refer the module from git repo -- by that if module developers made changes in code -- we can get them easily to local in companies
+write provider.tf in vpc-module-test
+here also we can mention variables in variables.tf
+
+vpc-module-test -- vpc.tf
+=========================
+module "vpc" {
+source = "git::<https-url-of-terraform-aws-vpc-git-repo>?ref=main"
+project = var.project
+environment = var.env
+}
+
+variables.tf
+============
+variable "project" {
+  default = "roboshop"
+}
+
+variable "env" {
+  default = "dev"
+}
+
+outputs.tf
+===========
+output "azs_info" {
+ value = module.vpc.azs_info
+}
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,520 @@
+steps for creation of vpc
+=========================
+create VPC -- CIDR
+create IGW -- attach to VPC
+create subnets -- public & private & database
+create route tables -- public & private & database
+associations & Routes
+create Elastic IP
+create NAT gateway -- to provide egress internet access to the resources in private subnets
+
+for instances created in private subnets -- don't enable public ip
+
+lets see creation of route tables -- public , private , database
+search -- aws route table terraform
+associate vpc to route table
+give name to route table by using tags
+
+comment the code in vpc-test -- outputs.tf
+
+search -- aws route terraform
+lets see creation of routes -- attach igw to public route table
+0.0.0.0/0 		IGW
+destination_cidr_block gateway_id
+
+private RT
+0.0.0.0/0 NAT
+destination_cidr_block nat_gateway_id
+
+database RT
+0.0.0.0/0 NAT
+destination_cidr_block nat_gateway_id
+
+next we have to create nat gateway -- for that we need elastic ip
+lets see creation of elastic ip
+give name to elastic_ip by using tags
+
+search -- aws nat gateway terraform
+we have to place nat in subnet 1a
+while creating nat gateway -- it does not asks for internet gateway
+without internet gateway we cannot create & use nat gateway
+so mention explicit dependency on internet gateway
+
+now lets see creation of private rt , database rt
+and add route to nat gateway
+
+lets see association of 2 public subnets with public rt , association of 2 private subnets with private rt , association of 2 database subnets with database rt .
+search -- aws route table association terraform
+use count variable
+public_subnet_cidrs , public(count.index)
+follow the same procedure for private & database route tables
+
+
+terraform-aws-vpc -- main.tf
+=============================
+resource "aws_vpc" "main" {
+  cidr_block       = var.vpc_cidr
+  instance_tenancy = "default"
+  enable_dns_hostnames = true
+
+  tags = local.vpc_final_tags
+}
+
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id # VPC association
+
+  tags = local.igw_final_tags
+}
+
+# Public Subnets
+resource "aws_subnet" "public" {
+  count = length(var.public_subnet_cidrs)
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.public_subnet_cidrs[count.index]
+  availability_zone = local.az_names[count.index]
+  map_public_ip_on_launch = true
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-public-us-east-1a
+        {
+            Name = "${var.project}-${var.environment}-public-${local.az_names[count.index]}"
+        },
+        var.public_subnet_tags
+    )
+}
+
+# private Subnets
+resource "aws_subnet" "private" {
+  count = length(var.private_subnet_cidrs)
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.private_subnet_cidrs[count.index]
+  availability_zone = local.az_names[count.index]
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-private-us-east-1a
+        {
+            Name = "${var.project}-${var.environment}-private-${local.az_names[count.index]}"
+        },
+        var.private_subnet_tags
+    )
+}
+
+# database Subnets
+resource "aws_subnet" "database" {
+  count = length(var.database_subnet_cidrs)
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.database_subnet_cidrs[count.index]
+  availability_zone = local.az_names[count.index]
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-database-us-east-1a
+        {
+            Name = "${var.project}-${var.environment}-database-${local.az_names[count.index]}"
+        },
+        var.database_subnet_tags
+    )
+}
+
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-public
+        {
+            Name = "${var.project}-${var.environment}-public"
+        },
+        var.public_route_table_tags
+  )
+}
+
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-private
+        {
+            Name = "${var.project}-${var.environment}-private"
+        },
+        var.private_route_table_tags
+  )
+}
+
+resource "aws_route_table" "database" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(
+        local.common_tags,
+        # roboshop-dev-database
+        {
+            Name = "${var.project}-${var.environment}-database"
+        },
+        var.database_route_table_tags
+  )
+}
+
+resource "aws_route" "public" {
+  route_table_id            = aws_route_table.public.id
+  destination_cidr_block    = "0.0.0.0/0"
+  gateway_id = aws_internet_gateway.main.id
+}
+
+resource "aws_eip" "nat" {
+  domain                    = "vpc"
+  
+  tags = merge(
+        local.common_tags,
+        {
+            Name = "${var.project}-${var.environment}-nat"
+        },
+        var.eip_tags
+  )
+}
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public[0].id # we are creating this in us-east-1a AZ
+
+  tags = merge(
+        local.common_tags,
+        {
+            Name = "${var.project}-${var.environment}"
+        },
+        var.nat_gateway_tags
+  )
+
+  # To ensure proper ordering, it is recommended to add an explicit dependency
+  # on the Internet Gateway for the VPC.
+  depends_on = [aws_internet_gateway.main]
+}
+
+resource "aws_route" "private" {
+  route_table_id            = aws_route_table.private.id
+  destination_cidr_block    = "0.0.0.0/0"
+  nat_gateway_id = aws_nat_gateway.main.id
+}
+
+resource "aws_route" "database" {
+  route_table_id            = aws_route_table.database.id
+  destination_cidr_block    = "0.0.0.0/0"
+  nat_gateway_id = aws_nat_gateway.main.id
+}
+
+
+resource "aws_route_table_association" "public" {
+  count = length(var.public_subnet_cidrs)
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public.id
+}
+
+resource "aws_route_table_association" "private" {
+  count = length(var.private_subnet_cidrs)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
+
+resource "aws_route_table_association" "database" {
+  count = length(var.database_subnet_cidrs)
+  subnet_id      = aws_subnet.database[count.index].id
+  route_table_id = aws_route_table.database.id
+}
+
+variables.tf
+============
+variable "project" {
+    type = string
+}
+
+variable "environment" {
+    type = string
+    validation {
+        condition     = contains(["dev", "qa", "uat", "prod"], var.environment)
+        error_message = "Environments should be one of dev, qa, uat or prod"
+    }
+}
+
+variable "vpc_cidr" {
+    type = string
+    default = "10.0.0.0/16"
+}
+
+variable "vpc_tags" {
+    type = map
+    default = {}
+}
+
+variable "igw_tags" {
+    type = map
+    default = {}
+}
+
+variable "public_subnet_cidrs" {
+    type = list
+    default = ["10.0.1.0/24", "10.0.2.0/24"]
+}
+
+variable "public_subnet_tags" {
+    default = {}
+    type = map
+}
+
+variable "private_subnet_cidrs" {
+    type = list
+    default = ["10.0.11.0/24", "10.0.12.0/24"]
+}
+
+variable "private_subnet_tags" {
+    default = {}
+    type = map
+}
+
+variable "database_subnet_cidrs" {
+    type = list
+    default = ["10.0.21.0/24", "10.0.22.0/24"]
+}
+
+variable "database_subnet_tags" {
+    default = {}
+    type = map
+}
+
+variable "public_route_table_tags" {
+    default = {}
+    type = map
+}
+
+variable "private_route_table_tags" {
+    default = {}
+    type = map
+}
+
+variable "database_route_table_tags" {
+    default = {}
+    type = map
+}
+
+variable "eip_tags" {
+    default = {}
+    type = map
+}
+
+variable "nat_gateway_tags" {
+    default = {}
+    type = map
+}
+
+
+
+open gitbash --
+cd vpc-test
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+for security reasons , 2 vpc's in aws cannot connect with each other
+if we want to share some information, we can connect     
+while connecting 2 vpc's -- source vpc cidr & destination vpc cidr should be different
+otherwise routes gets confused
+
+each and every region contains one default vpc
+the process of establishing connection between 2 vpc's is known as peering 
+now we will connect our roboshop vpc with default vpc
+
+vpc-peering
+============
+connecting two vpc's in AWS
+they can be in
+same region , same account
+different region , same account
+same region , different account
+different region, different account
+
+condition -- cidr's of 2 vpc's should not overlap
+requestor -- who asks for connection -- roboshop-dev
+acceptor -- who can accept -- default
+this will be useful when we want to share data through private connections
+we will take vpc id of third parties & account number -- we will raise peering request --they should accept request -- then we can share data
+
+we will do this process by using GUI
+vpc -- peering connection -- create peering connection
+name -- roboshop-dev-default
+select a local vpc to peer with
+requestor -- roboshop-dev
+select another vpc to peer with
+vpc id (requestor) -- account -- my account
+region -- this region
+vpc id -- requestor -- <vpc-id>
+vpc cidr comes
+create peering connection
+
+we r using the same account for peering -- so accept or reject the request
+now accept the request -- peering connection will be successful
+
+peering is outside the vpc
+but servers are inside the subnets
+
+we have to choose shortest route
+requestor server is in public subnet -- ip's -- 54.78.98.123  10.0.1.13
+acceptor server -- ip's -- 192.168.2.1 
+192.168.2.1 is not in the range of 10.0.1.13
+every ip address comes in the range of 0.0.0.0
+to do private or secret share of data we have to use private routes
+so we have to manually add route in route table , in that route u should mention -- cidr of acceptor & peering connection id
+
+now open roboshop-dev-public-rt -- routes -- add route -- <acceptor-vpc-cidr> -- <peering-connection-id> -- create
+
+now open rt of default vpc -- routes -- add route -- <requestor-vpc-cidr> -- <peering-connection-id> -- create
+
+for which subnet u want access -- use route table related to that subnet
+
+lets automate this vpc peering 
+we can ask user that he needs peering or not
+
+variables.tf
+============
+variable "is_peering_required" {
+    default = false
+    type = bool
+}
+
+search -- aws vpc peering terraform
+when count=1 -- we are saying terraform to create resource
+when count=0 -- we are saying terraform peering is not required
+to get default vpc id -- use data source
+acceptor & requestor are in same account -- so mention auto_accept as true
+in tags mention name for peering connection
+let see adding routes
+add route in public subnet -- of roboshop-dev
+mention count here -- because if user does not need vpc-peeing then there is no need to execute this block of code
+in destination we have to add default vpc cidr
+to get default vpc cidr use data source
+mention vpc peering connection id
+
+in default vpc route table also we have to add the route --
+here in destination add -- roboshop-cidr
+we have to get route-table id of default vpc -- use data source for that
+
+
+when we have a vpc -- one default route table will be created -- and this contains main route -- roboshop-dev contains default route table -- it contains -- main route with -- cidr of roboshop-dev vpc 
+because locally we need connections for every subnet
+when u create any route table -- u will get entry from main route table with vpc cidr
+
+here we r adding acceptor -- in all route tables of roboshop-dev
+
+we have setup count -- in route table entry block of code
+because we have added count aws_vpc_peering_connection becomes list
+even if the peering connection is one or two or many
+so use count.index whenever we refer aws_vpc_peering_connection
+
+if none of the entries matched in route table -- request goes from  0.0.0.0
+
+open repo -- terraform-vpc-module
+
+peering.tf
+==========
+resource "aws_vpc_peering_connection" "default" {
+  count = var.is_peering_required ? 1 : 0
+  #peer_owner_id = var.peer_owner_id #useful when u r using another account for peering
+
+  # Acceptor
+  peer_vpc_id   = data.aws_vpc.default.id
+
+  # Requestor
+  vpc_id        = aws_vpc.main.id
+
+  auto_accept = true
+
+  accepter {
+    allow_remote_vpc_dns_resolution = true
+  }
+
+  requester {
+    allow_remote_vpc_dns_resolution = true
+  }
+
+  tags = merge(
+    local.common_tags,
+    {
+        Name = "${var.project}-${var.environment}-default"
+    }
+  )
+}
+
+resource "aws_route" "public_peering" {
+  count = var.is_peering_required ? 1 : 0
+  route_table_id            = aws_route_table.public.id
+  destination_cidr_block    = data.aws_vpc.default.cidr_block
+  vpc_peering_connection_id  = aws_vpc_peering_connection.default[count.index].id
+}
+
+resource "aws_route" "private_peering" {
+  count = var.is_peering_required ? 1 : 0
+  route_table_id            = aws_route_table.private.id
+  destination_cidr_block    = data.aws_vpc.default.cidr_block
+  vpc_peering_connection_id  = aws_vpc_peering_connection.default[count.index].id
+}
+
+resource "aws_route" "database_peering" {
+  count = var.is_peering_required ? 1 : 0
+  route_table_id            = aws_route_table.database.id
+  destination_cidr_block    = data.aws_vpc.default.cidr_block
+  vpc_peering_connection_id  = aws_vpc_peering_connection.default[count.index].id
+}
+
+resource "aws_route" "default_peering" {
+  count = var.is_peering_required ? 1 : 0
+  route_table_id            = data.aws_route_table.default.id
+  destination_cidr_block    = var.vpc_cidr
+  vpc_peering_connection_id  = aws_vpc_peering_connection.default[count.index].id
+}
+
+data.tf
+=======
+#getting default vpc id & default vpc cidr
+data "aws_vpc" "default" {
+  default = true
+}
+
+# to get default vpc route table id
+data "aws_route_table" "default" {
+  vpc_id = data.aws_vpc.default.id
+  filter {
+    name   = "association.main"
+    values = ["true"]
+  }
+}
+
+open repo -- terraform-vpc-test
+
+main.tf
+========
+module "vpc" {
+is_peering_required = "true"
+}
+
+open gitbash --
+cd terraform-vpc-test
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+write documentation for terraform-vpc-module
+
+we have to give output regarding vpc id of roboshop-dev , public subnet id , private subnet id , database subnet id -- to use them further during creation of ec2 instance
+
+there are 2 types of infra
+1. project infra -- vpc , database , security group , load balancers -- we will create this infra one time & we don't delete them -- one time infra
+
+2. Application infra -- ec2 instances -- they will be created & deleted frequently -- based on application updates - frequently changing
+
+to start application we need project infra -- to create applications
+
+if two vpc's which we want to establish connection contains same cidr then we have to use private link or vpn to connect to ther vpc
+
+
+
+

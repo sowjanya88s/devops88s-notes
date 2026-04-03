@@ -1,0 +1,390 @@
+lets see architecture diagram of roboshop project
+
+architecture diagram is all about what components are there in our project & incoming traffic & outgoing traffic
+in our aws account we have to create vpc first -- in that create public & private & data base subnets
+in database subnet -- we will create mongodb , MySQL , redis ,rabbitmq instance 
+in private subnet -- we will create catalogue, user , cart, shipping , payment instances
+in public subnet -- we will create frontend instance
+
+request from frontend goes to components , we need load balancer between while sending requests from frontend to components because upto now we have configured only one catalogue instance , to improve scalability in our project -- when traffic increaes -- we need multiple catalogue servers
+when no.of servers increaese -- we need load balancer compulsarily
+for ex cart depends on catalogue , and we have 5 catalogue servers , load balancer checks which catalogue server is free & then decides which catalogue server , the cart should connect to
+before frontend also we will place one load balancer 
+the load balancer before frontend is public -- we use https here
+& the load balancer before components is private (internal) -- we use http here
+here we will configure security group for each and every component 
+
+project infra -- one time infra (vpc , sg , LB , databases) -- changes very rarely
+application infra -- keeps changing (sg rules , components) -- based on traffic no.of catalogue servers may increase or decrease & to increase security we may modify sg rules 
+
+now create roboshop vpc by using terraform-vpc-test
+create new repo -- roboshop-infra
+in roboshop-infra -- create 00-vpc repo
+in 00-vpc repo -- main.tf , variables.tf , provider.tf
+
+provider.tf
+===========
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+      version = "6.33.0" # Terraform AWS provider version
+    }
+  }
+
+  backend "s3" {
+    bucket  = "remote-state-aws-88s-dev" # Replace with your unique bucket name
+    key     = "roboshop-dev-vpc"
+    region  = "us-east-1"
+    encrypt = true
+    use_lockfile   = true
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+main.tf
+=======
+module "vpc" {
+    source = "git::https://github.com/daws-88s/terraform-aws-vpc.git?ref=main"
+    project = var.project
+    environment = var.environment
+    is_peering_required = true
+}
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+open gitabsh
+cd roboshop-infra
+cd 00-vpc 
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+by this vpc & peering with default vpc will be created
+
+now we will create security group
+from now we will tight sg
+now we will create one instance in roboshop-vpc and create one instance in default vpc -- we will see how those two instances will be connected
+for every vpc -- one default security group will be created
+
+sg for roboshop-vpc
+sg name -- roboshop-dev-sg
+select roboshop vpc
+no inbound rules for now
+in outbound -- allow all
+create security group
+
+sg for default vpc
+sg name -- default-vpc-sg
+select default vpc
+no inbound rules for now
+in outbound -- allow all
+create security group
+
+lets create instances
+first instance in roboshop-dev vpc
+instance name -- roboshop-instance
+ami -- devops-practice ami
+select roboshop vpc
+subnet -- roboshop-dev-private-subnet-us-east-1a
+sg name -- roboshop-dev-sg
+auto assign public ip -- disable
+launch instance
+
+lets create another instance in default vpc
+instance name -- default-instance
+ami -- devops-practice ami
+select default vpc
+subnet -- select any
+sg -- default-vpc-sg
+auto assign public ip -- disable
+launch instance
+
+for both instances we will get only private ip
+
+peering is already created during creation of vpc
+and check entries come in route tables
+
+there is no public ip -- how should we login to those instances -- we r in india & servers are in north virginia
+so we cannot connect to them using putty
+
+so we have 2 options
+1.vpn
+2.bastion host -- instance in public subnet used to connect instances in private subnets for security purpose
+
+we will create one bastion or jump host in public subnet & we will attach one sg to it & by using that bastion host we will connect to other instances in private & database subnets
+
+now lets create one server -- to use as bastion host
+ami -- devops-practice ami
+select roboshop vpc
+subnet -- select public-subnet-us-east-1a
+sg -- create roboshop-bastion-sg
+inbound -- my ip --
+so only i can connect to bastion host
+search google -- what is my ip -- u can see ur public ip -- <public-ip>/32 (means only one ip)
+outbound -- allow all
+auto assign public ip -- enable
+launch instance
+
+now connect to bastion host -- use public ip -- connect using putty
+username & password -- root & DevOps321
+now we have to connect to the instance in roboshop-vpc from this bastion host
+try connecting -- command 
+telnet <private-ip-of-roboshop-instance> 22
+we cannot connect now -- because in sg of roboshop-vpc -- there are no inbound rules
+
+now select roboshop-instance -- sg -- inbound-rules -- 
+type -- ssh
+source -- custom -- give private-ip-of-bastion-host
+and save rules
+try connecting to  roboshop-instance now
+telnet <private-ip-of-roboshop-instance> 22
+u can connect
+
+there is a problem here , if the bastion host instance is deleted and created once again -- then its private ip will be changed -- then we have to change the private ip in sg of roboshop-instance 
+when the project is big & no.of instances increased -- we can't imagine in how many places we have to change this ip
+solution -- in sg of roboshop-instance  -- instead of private ip , give sg id of bastion host
+roboshop-instance -- sg -- inbound-rules -- 
+type -- ssh
+source -- custom -- give sg-id-of-bastion-host
+and save rules
+meaning is -- to which instance this sg-id is attached allow port no 22 from that instance
+because sg id never changes 			
+
+now login to roboshop-instance --
+ssh ec2-user@<private-ip>
+now try to connect to default-instance
+telnet <private-ip-of-default-instance> 22
+u cannot connect
+because there are no inbound rules for the sg attached to default-instance
+select default instance -- sg -- inbound-rules -- 
+type -- ssh
+source -- custom -- give sg-id-of-roboshop-instance
+and save rules
+now try to connect to default-instance
+telnet <private-ip-of-default-instance> 22
+u connect
+when traffic goes outside or coming inside from an instance it checks route table related to subnet -- for all available routes
+if there are no routes available -- then it goes with longest route 0.0.0.0/0 and travels through the internet
+
+security measures
+=================
+now we will create security group for each and every component
+we have disabled public ip's at subnet level
+we have created perfect routes
+sg rules are created very tightly
+
+security group depends on vpc. we have to attach sg with any vpc
+
+open roboshop-infra-dev
+now create one repo -- 10-sg
+remaining folder are left for future usage
+
+lets create module for security group 
+create one new repo -- terraform-aws-sg
+in terraform-aws-sg -- create files -- main.tf , varaibles.tf , data.tf , locals.tf ,provider.tf
+
+search -- aws sg terraform
+we have to pass vpc_id for creation of sg
+mention common_tags in local.tf
+always allow outbound traffic for all(because it is generated from instance)
+we have 3 tags -- common_tags , Name , sg_tags 
+in those three -- sg_tags have overriding capability -- so place it at first -- by that finally we can override the name and common_tags even if the user provided
+
+
+terraform-aws-sg -- main.tf
+===========================
+resource "aws_security_group" "main" {
+  name        = "${var.project}-${var.environment}-${var.sg_name}"
+  description = "Allow TLS inbound traffic for ${var.project} in ${var.environment} for component ${var.sg_name}"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+  
+  tags = merge(
+    var.sg_tags,
+    local.common_tags,
+    {
+        Name = "${var.project}-${var.environment}-${var.sg_name}"
+    }
+  )
+}
+
+variables.tf
+============
+variable "project" {
+    type = string
+}
+
+variable "environment" {
+    type = string
+}
+
+variable "sg_name" {
+    type = string
+}
+
+variable "vpc_id" {
+    type = string
+}
+
+variable "sg_tags" {
+    type = map
+    default = {}
+}
+
+locals.tf
+=========
+locals {
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+}
+
+outputs.tf
+==========
+output "sg_id" {
+    value = aws_security_group.main.id
+}								
+
+we have to use sg module
+roboshop-infra -- 10-sg -- 
+
+main.tf
+======
+module "sg" {
+source = "../../terraform-aws-sg"
+project = "roboshop"
+environment = "dev"
+sg_name = "mongodb"
+vpc_id = local.vpc_id
+}
+
+locals.tf
+=========
+locals {
+    vpc_id = data.aws_ssm_parameter.vpc_id.value
+}
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+ 
+ data.tf
+=========
+data "aws_ssm_parameter" "vpc_id" {
+    name = "/${var.project}/${var.environment}/vpc_id"
+}
+
+
+we need vpc_id here , while creating vpc_id by using outputs.tf -- output the vpc_id from it and catch it by using roboshop-infra -- 00-vpc module -- and use the vpc_id here in 10-sg
+we have to share the information in between the components -- from vpc to sg
+
+configuration -- confidential (secrets) & non-confidential (parameters)
+use ssm parameter store to store confidential & non confidential info
+now store vpc_id & subnet_ids in aws ssm parameter store for future use after creation of vpc
+while creating sg , use vpc_id from ssm parameter store
+and then store sg_id in ssm parameter store , use it while creating Load balancer
+like that we can store the info in ssm parameter store & access the info from it
+write output blocks for vpc_id in terraform-aws-vpc & catch it from roboshop-infra & use it in sg
+search -- aws ssm parameter store terraform
+creates one vpc-id parameter & stores vpc-id in it
+now sg should get vpc_id from ssm parameter store
+for getting vpc-id from ssm use data source
+search -- ssm parameter store data source terraform
+
+goto vpc module
+terraform-aws-vpc -- outputs.tf
+===============================
+output "vpc_id" {
+value = aws_vpc.main.id
+}
+
+roboshop-infra -- 00-vpc -- outputs.tf
+======================================
+output "vpc_id" {
+value = module.vpc.vpc_id
+}
+
+roboshop-infra -- 00-vpc -- parameters.tf
+=========================================
+resource "aws_ssm_parameter" "vpc_id" {
+  name  = "/${var.project}/${var.environment}/vpc_id"
+  type  = "String"
+  value = module.vpc.vpc_id
+}
+
+now create sg
+open gitbash
+cd roboshop-infra
+cd 10-sg
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+in provider if u r storing terraform state file in s3 bucket then change the key name compulsarily
+
+now go to sg's -- roboshop-mongodb sg will be created
+now we have to store sg-id in ssm parameter store
+write output block to output sg_id
+
+roboshop-infra -- 10-sg -- outputs.tf
+=====================================
+output "sg_id" {
+value = aws_security_group.main.id
+}
+
+parameters.tf
+=============
+ resource "aws_ssm_parameter" "mongodb_sg_id" {
+  name  = "/${var.project}/${var.environment}/mongodb_sg_id"
+  type  = "String"
+  value = module.sg.sg_id
+} 
+
+cd roboshop-infra
+cd 10-sg
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+goto ssm parameter store -- u can see vpc-id , roboshop-mongodb sg id parameters
+
+security groups will never change -- only inbound rules inside it changes -- we will write them seperately
+
+
+
+
+
+
+
+
+
+ 
+
+
+

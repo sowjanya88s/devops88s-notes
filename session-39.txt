@@ -1,0 +1,497 @@
+we need subnet ids also 
+while creating instances -- it asks in which subnet -- instances should be created
+from vpc module -- we need to write code to output subnet ids
+we have 2 public subnets & 2 private subnets & 2 database subnets
+
+open terraform-aws-vpc repo --
+terraform-aws-vpc -- outputs.tf
+===============================
+output "public_subnet_ids" {
+    value = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+    value = aws_subnet.private[*].id
+}
+
+output "database_subnet_ids" {
+    value = aws_subnet.database[*].id
+}
+
+open roboshop-infra -- 00-vpc
+outputs.tf
+==========
+output "public_subnet_ids" {
+    value = module.vpc.public_subnet_ids
+}
+
+output "private_subnet_ids" {
+    value = module.vpc.private_subnet_ids
+}
+
+output "database_subnet_ids" {
+    value = module.vpc.database_subnet_ids
+}
+
+we need to store subnet ids in ssm parameter store
+we have 2 subnet ids -- in list
+so we have to use -- type -- stringlist -- in ssm parameter store
+
+open roboshop-infra -- 00-vpc
+parameters.tf
+=============
+resource "aws_ssm_parameter" "public_subnet_ids" {
+  name  = "/${var.project}/${var.environment}/public_subnet_ids"
+  type  = "StringList"
+  value = join(",", module.vpc.public_subnet_ids)
+}
+
+resource "aws_ssm_parameter" "private_subnet_ids" {
+  name  = "/${var.project}/${var.environment}/private_subnet_ids"
+  type  = "StringList"
+  value = join(",", module.vpc.private_subnet_ids)
+}
+
+resource "aws_ssm_parameter" "database_subnet_ids" {
+  name  = "/${var.project}/${var.environment}/database_subnet_ids"
+  type  = "StringList"
+  value = join(",", module.vpc.database_subnet_ids)
+}
+
+subnet_ids is a list
+in ssm parameter store -- we r using string list -- but we have to separate ids in list with commas
+we have to convert list to string -- because aws is expecting string
+we have to use join function here -- to separate ids with comma
+before saving ids in ssm parameter store
+
+we need upto 12 security groups
+so create a variable sg_name and mention names of sg's in a list
+and loop them through the sg module
+
+open repo -- roboshop-infra-dev -- 10-sg
+variables.tf
+============
+variable "sg_names" {
+    type = list
+    default = [
+        # Databases
+        "mongodb", "redis", "mysql", "rabbitmq",
+        # Backend
+        "catalogue", "user", "cart", "shipping", "payment",
+        # Backend ALB
+        "backend_alb",
+        # Frontend
+        "frontend",
+        # Frontend ALB
+        "frontend_alb",
+        # Bastion
+        "bastion",
+        # Openvpn
+        "openvpn"
+    ]
+}
+
+we have mentioned sg_name as string variable
+we assigned sg_names(list variable) to it -- to create 14 sg's 
+
+main.tf
+========
+module "sg" {
+    count = length(var.sg_names)
+    source = "../../terraform-aws-sg"
+    project = var.project
+    environment = var.environment
+    sg_name = replace(var.sg_names[count.index], "_", "-")
+    vpc_id = local.vpc_id
+}
+
+in backend_alb ,
+in terraform we have to use _ for reference 
+but for human reference we have to use -
+replace _ with - before sending them to module
+for that use replace function -- replace(string, substring, replacement)
+by this sg's will be created as roboshop-dev-frontend-alb
+
+open gitbash --
+cd roboshop-infra
+cd 10-sg
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+now we have to store sg-id's in ssm parameter store
+this is also a list
+
+open roboshop-infra -- 10-sg --
+parameters.tf
+=============
+resource "aws_ssm_parameter" "sg_id" {
+  count = length(var.sg_names)
+  name  = "/${var.project}/${var.environment}/${var.sg_names[count.index]}_sg_id"  
+#roboshop-dev-backend_alb_sg_id
+  type  = "String"
+  value = module.sg[count.index].sg_id  
+}
+
+open gitbash --
+cd roboshop-infra
+cd 10-sg
+terraform apply -auto-approve		
+
+these sg id's does not change , only rules inside sg's will change
+create a new repo -- 20-sg-rules
+roboshop-infra -- 20-sg-rules
+
+
+sg's does not changes only rules inside them changes
+we will write sg rules separately
+search -- aws sg ingress rule terraform
+create new repo -- 20-sg-rules
+creates file inside it -- provider.tf , sg_rules.yaml,
+sg_rules.yaml
+=======
+bastion:
+- name: bastion_internet
+  port: 22
+  src: internet
+  dest: bastion
+mongodb:
+- name: mongodb_bastion
+  port: 22
+  src: bastion
+  dest: mongodb
+- name: mongodb_catalogue # MongoDB accepting connections from Catalogue
+  port: 27017
+  src: catalogue
+  dest: mongodb
+- name: mongodb_user
+  port: 27017
+  src: user
+  dest: mongodb
+
+bastion should accept traffic from internet or our laptop ip address on port no 22
+because we should be able to connect to bastion form our laptop using putty
+we r using internet here because daily our ip address changes
+in ipv4 mention internet ip address -- 0.0.0.0/0
+
+if u want to mention laptop ip -- 
+search -- how to get ipv4 address in terraform
+by clicking this url -- https://ipv4.icanhazip.com -- we can get ip of our laptop
+use data source to get public ip of laptop
+output the ip address & use it in ipv4 ip address
+then we can connect to bastion host from our laptop
+in sg ingress rules -- mention ip as -- <public-ip-of-laptop>/32
+define my_ip variable in locals and use it in sg
+we are creating this rule of bastion instance
+so get bastion sg id from ssm parameter store
+
+to connect to mongodb we should use bastion
+because mongodb instance will be created in database subnet and it does not contains pulic ip , so we should use bastion host to connect to mongodb
+mongodb should accept connection from bastion on port 22
+here attach bastion sg-id in ingress rules of mongodb
+then all instances attached to that sg can connect to mongodb(useful when ip address changes)
+use source_security_group_id(useful for sg id's) instead of cidr_blocks(useful for ip addresses)
+while creating sg either we should mention source_security_group_id or cidr_blocks
+traffic is coming from bastion i.e source
+destination -- means we r creating this rule for mongodb
+
+
+according to architecture diagram,
+mongodb should accept connections from catalogue
+so traffic is coming from catalogue -- source -- catalogue
+port -- 27017 , destination -- mongodb
+
+mongodb should accept connections from user
+so traffic is coming from user -- source -- user
+port -- 27017 , destination -- mongodb
+
+use resource definition directly to create ingress rules
+previously we have used module to create egress rules & security group
+
+main.tf
+=======
+# Bastion
+resource "aws_security_group_rule" "bastion_internet" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  #cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = [local.my_ip]
+  # which SG you are creating this rule
+  security_group_id = local.bastion_sg_id
+}
+
+# MongoDB
+resource "aws_security_group_rule" "mongodb_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.mongodb_sg_id
+}
+
+resource "aws_security_group_rule" "mongodb_catalogue" {
+  type              = "ingress"
+  from_port         = 27017
+  to_port           = 27017
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.catalogue_sg_id
+  security_group_id = local.mongodb_sg_id
+}
+
+resource "aws_security_group_rule" "mongodb_user" {
+  type              = "ingress"
+  from_port         = 27017
+  to_port           = 27017
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.user_sg_id
+  security_group_id = local.mongodb_sg_id
+}
+
+data.tf
+=======
+data "http" "my_public_ip_v4" {
+  url = "https://ipv4.icanhazip.com"
+}
+
+output "my_ipv4_address" {
+  value = chomp(data.http.my_public_ip_v4.response_body)
+}
+
+data "aws_ssm_parameter" "bastion_sg_id" {
+    name = "/${var.project}/${var.environment}/bastion_sg_id"
+}
+
+data "aws_ssm_parameter" "mongodb_sg_id" {
+    name = "/${var.project}/${var.environment}/mongodb_sg_id"
+}
+
+locals.tf
+=========
+locals {
+  my_ip = "${chomp(data.http.my_public_ip_v4.response_body)}/32"
+  bastion_sg_id = data.aws_ssm_parameter.bastion_sg_id.value
+  mongodb_sg_id = data.aws_ssm_parameter.mongodb_sg_id.value
+  catalogue_sg_id = data.aws_ssm_parameter.catalogue_sg_id.value
+  user_sg_id = data.aws_ssm_parameter.user_sg_id.value
+}
+
+open gitbash --
+cd roboshop-infra
+cd 20-rules
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+after that open sg's of bastion & mongodb -- check rules there
+
+if we didn't set sg rules perfectly or tightly -- sites gets hacked
+
+let's see creation of instance for bastion
+because all db & components instances are dependant on bastion
+all db's -- will be created in db subnet (no public ip allocation)
+all components -- will be created in private subnet (no public ip allocation)
+create bastion in us-east-1a az
+search -- aws instance terraform
+in options -- use subnet_id -- to create instance in  us-east-1a az
+we have saved subnet ids in aws ssm parameter store as stringlist(means string)
+now we have to convert that string to list & have to access 0th element
+use split function -- split(",", data.aws_ssm_parameter.public_subnet_ids.value)[0]
+gets public subnet id from roboshop-vpc which is in us-east-1a
+and attach bastion sg id (sg id is a list type) to this instance
+
+we can create mongodb instance and we cannot configure it
+we should use bastion host to connect mongodb
+we can use provisioners remote-exec to connect -- we will write a script and we have to copy the script & execute the script in mongodb
+from bastion host only -- create mongodb instance
+for that we need authentication
+
+IAM (Identity Access management)
+================================
+user group 
+create one user & assign him to the group & add permissions to that group (which is easy -- instead of giving permissions to each user individually)
+
+devops team
+===========
+Role		Permissions
+trainee -> only read access
+junior engineer -> read + create
+senior engineer -> read + create + update
+team lead -> read + create + update + delete
+architect -> read + create + update + delete
+team manager -> read + create + update + delete
+
+User -> roboshop-trainee(group) -> only read access
+
+Nouns -> Names 
+Verbs -> Actions
+
+Everything is called resource/service in AWS
+
+EC2 -> noun
+createEC2, readEC2, updateEC2, deleteEC2
+
+when we create user -- what services he can access (nouns) -- what are the permissions he have(actions)
+
+here user is human
+human authentication -- access key & secret access key (programmatic access)
+console -- username & password (console)
+here ec2 is non human -- if we give our credentials (access key & secret access key)here -- when we exit from the company -- it will become a problem
+
+here in aws -- we can use roles
+user vs aws
+user for humans 
+create role for non humans like for aws services to act on behalf of us
+now we have to create a role for bastion -- because bastion has to create other resources
+
+open aws console -- IAM -- roles -- create role
+trusted entity type -- aws service
+use case -- ec2 -- next
+add permissions -- amazon ec2 full access  -- next
+name -- roboshop-dev-bastion -- create role
+so now attach this role to ec2 instance -- then it can access that role
+while creating instance -- advanced details -- IAM instance profile -- we can see all ec2 related  roles here -- select required role -- it will be attached to that instance
+
+upto now we have created one role & attached permissions to that role  -- we can do this with terraform & attached role to instance
+search -- iam role terraform
+we need role for ec2
+now we need to attch permissions to that role
+search -- aws iam role permission attch terraform
+in that get policy arn form iam permissions -- policies -- ec2 full access -- copy arn from it
+
+bastion expects iam instance profile
+search -- iam instance profile terraform
+give name to iam instance profile & mention aws_iam_role of bastion in it
+now mention iam instance profile in bastion instance -- by this role will be attached
+
+
+create new repo -- 30-bastion
+create files -- provider.tf , main.tf , data.tf , varaibles.tf , locals.tf
+main.tf
+=======
+resource "aws_instance" "bastion" {
+  ami           = local.ami_id
+  instance_type = "t3.micro"
+  subnet_id = local.public_subnet_id
+  vpc_security_group_ids = [local.bastion_sg_id]
+  iam_instance_profile = aws_iam_instance_profile.bastion.name
+ 
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-bastion"
+    },
+    local.common_tags
+  )
+}
+
+resource "aws_iam_role" "bastion" {
+  name = "RoboShopDevBastion"
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = merge(
+    {
+        Name = "RoboShopDevBastion"
+    },
+    local.common_tags
+  )
+}
+
+resource "aws_iam_role_policy_attachment" "bastion" {
+  role       = aws_iam_role.bastion.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+# Create the instance profile
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${var.project}-${var.environment}-bastion"
+  role = aws_iam_role.bastion.name
+}
+
+data.tf
+=======
+data "aws_ami" "joindevops" {
+  most_recent      = true
+  owners           = ["973714476881"]
+
+  filter {
+    name   = "name"
+    values = ["Redhat-9-DevOps-Practice"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_ssm_parameter" "public_subnet_ids" {
+    name = "/${var.project}/${var.environment}/public_subnet_ids"
+}
+
+data "aws_ssm_parameter" "bastion_sg_id" {
+    name = "/${var.project}/${var.environment}/bastion_sg_id"
+}
+
+locals.tf
+=========
+locals {
+    ami_id =  data.aws_ami.joindevops.id
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+    # public subnet in 1a AZ
+    public_subnet_id = split(",", data.aws_ssm_parameter.public_subnet_ids.value)[0]
+    bastion_sg_id = data.aws_ssm_parameter.bastion_sg_id.value
+}
+
+variables.tf
+=============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+open gitbash now
+cd 30-bastion
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+by this bastion-instance will be created & bastion role will be created & attached to the bastion instance
+
+
+
+
+
+

@@ -63,7 +63,7 @@ hard disk near to computer
 network disk, any where in the internet like google drive, Microsoft drive, S3, etc..
 
 compared to network disk HD acts fast and latency is less
-so place OS, DB always should be in HD
+so  OS, DB always should be in HD
 normal files and objects are stored in network storages
 
 at a time one HD can be mounted to only one computer.
@@ -99,7 +99,7 @@ nvme1n1 -> new disk -> database data, imp files and configurations are stored he
 if there is a problem in server , we attach this disk to another server
 
 4. create partition from the disk
-sudo parted /dev/nvme1n1 --script mklabel gpt mkpart primary 0% 100% n
+sudo parted /dev/nvme1n1 --script mklabel gpt mkpart primary 0% 100% (disk into partitions)
 mkpart primary 0% 100% n -- means single partition will be created
 --script -- runs non-interactively(safe for automation)
 mklabel -- creates GUID partition table
@@ -111,7 +111,7 @@ now we have to create file system
 usually data in system is stored in 0's and 1's
 when u install file system the data will be shown in human readable format
 xfs -- recent best file system
-sudo mkfs.xfs -f /dev/nvme1n1
+sudo mkfs.xfs -f /dev/nvme1n1p1 (partition formatting)
 
 db data is stored in tables and columns and also it is stored in /var/lib/mysql in HD
 /var/lib/mysql -> mysql data is stored here
@@ -122,17 +122,17 @@ mkdir -p /data
 -p -- if not exists create directory otherwise don't
 now we mount the partition to /data 
 this means when data comes to /var/lib/mysql save that to /data
-mount /dev/nvme1n1 /data
+mount /dev/nvme1n1p1 /data
 
 df -hT
 u should see
-/dev/nvme1n1 20G /data
+/dev/nvme1n1p1 20G /data
 
 this process is temporary, when the system reboots it will go away(i.e formatting with file system & making partition & mounting disk to a directory)
 
 so make this permanent we have to make entry in fstab
 blkid -- block id command will give universal id for the block(UUID)
--- blkid /dev/nvme1n1
+-- blkid /dev/nvme1n1p1
 UUID="0683949b-ce15-4d77-b202-4d47ee2a863a"
 
 when the linux system starts it will check the entries in fstab and loads them into the server

@@ -102,7 +102,7 @@ Hardlink
 4. they points to same memory location, so memory is not wasted
 5. you can't create hardlink to folders
 6. hardlinks are used for backup.
-7. when all links are deleted, then only file will be deleted.
+7. when all links are deleted, then only original file will be deleted.
 if original file is deleted link file points to same memory block so it shows same data as original file. so hardlink works as backup
 
 note: files in different file systems can contain same inode number. it treats each mount point as different file system
@@ -144,7 +144,7 @@ in olden days people used SVN
 git -> vcs(version control system)
 the following things can be done by using GIT
 1. version control
-2. who did the changes, when did the changes
+2. who did the changes, when they did the changes
 3. if a problem comes , you can track who did the changes
 4. if some version failed, restoring of previous version is easy
 5. if new changes come -- review is also easy -> Pull Requests
@@ -176,9 +176,9 @@ login to git -- in right side corner -- click profile icon -- create one organiz
 
 download Visual Studio Code for windows & install it -- for writing or editing code
 
-firstly , open one directory gitbash -- maintain all repos of git in one directory
+firstly , open one directory in gitbash -- maintain all repos of git in one directory
 1. clone the repo -> first time download
-for ex u have one directory in local named practice 
+for ex: u have one directory in local named practice 
 open gitbash -- goto practice -- give below command
 git config --global user.email "<ur-mail-id>"
 git config --global user.name "<ur-name>"

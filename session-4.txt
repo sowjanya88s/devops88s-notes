@@ -81,6 +81,8 @@ id <user-name>
 cat /etc/passwd -> all users info
 cat /etc/group -> display all the groups in server
 
+login as user -- 
+
 A user in Linux will have only one primary group and atleast one secondary group
 
 when you create user, group also will be created with same name
@@ -97,6 +99,8 @@ by default only key-based authentications are enabled
 
 /etc/ssh/sshd_config -> ssh configs are here
 sshd -t -> check the syntax of config
+
+login as user -- ssh sowji@<public-ip>
 
 How to give sudo access to user
 

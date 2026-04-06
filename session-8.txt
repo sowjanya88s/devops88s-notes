@@ -28,8 +28,7 @@ now we see frontend
 Nginx
 ======
 popular http web server, reverse proxy
-Apache
-HTML, CSS and JS code runs by -> Web server
+Apache HTML, CSS and JS code runs by -> Web server
 
 configs -> /etc/nginx
 HTML -> /usr/share/nginx/html
@@ -70,14 +69,14 @@ content filtering -- in companies they will restrict ur access of sites at vpn l
 
 Reverse Proxy
 =============
-1. Hiding server identity (users thinks that respone is coming from frontend but response actually comes from backend or application server)
+1. Hiding server identity (users thinks that response is coming from frontend but response actually comes from backend or application server)
 2. Server Aware
 3. for Security reasons and queue management they use reverse proxy
-4. Load balancing is queue management
+4. useful for Load balancing and queue management
 5. used for SSL/TLS/HTTPS termination
 
 https -- encrypts the data for security reasons
-once request to our env (server) https is not needed
+once request comes to our env (server) https is not needed
 by https also fetching data becomes slow
 we implement https at entry point of our env(i.e front end ) -- this is called ssl/tls/https termination
 frontend to backend , backend to db -- here we don't use https
@@ -189,8 +188,8 @@ DELETE
 Domain
 DNS -> Domain name system
 
-upto now we have given ip addresses. ip address changes when we restart servers or when server crashes , we have to create new servers which is time consumingin this case server public ip address changes
-after that we have change ip address -- in both cases updation of ip requires atleast 10 mins -- in projects 10mins downtime of website becomes huge loss
+upto now we have given ip addresses. ip address changes when we restart servers or when server crashes , we have to create new servers which is time consuming in this case server public ip address changes
+after that we have to change ip address -- in both cases updation of ip requires atleast 10 mins -- in projects 10mins downtime of website becomes huge loss
 
 humans ->reference --> names
 computers -> reference --> numbers

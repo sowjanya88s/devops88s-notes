@@ -1,0 +1,427 @@
+lets see creation of MySQL & RabbitMQ instances
+we r using bastion host to launch db instances and for connecting those instances using terraform
+inside each db instances we r installing ansible & we r configuring those instances
+
+in ansible-roboshop-roles-tf -- inventory.ini 
+below each component -- mention as localhost
+
+inventory.ini
+=============
+[mongodb]
+localhost
+
+[catalogue]
+localhost
+
+[redis]
+localhost
+
+[user]
+localhost
+
+[cart]
+localhost
+
+[mysql]
+localhost
+
+[shipping]
+localhost
+
+[rabbitmq]
+localhost
+
+[payment]
+localhost
+
+[frontend]
+localhost
+
+create bastion host -- connect to it 
+clone ansible-roboshop-roles-tf
+cd ansible-roboshop-roles-tf
+we have mentioned commands to install terraform in user_data
+
+if u give component as MySQL -- 
+request goes to  ansible-roboshop-roles-tf -- group_vars -- MySQL -- vault.yaml
+executes and MySQL password will be stored in ssm parameter store
+if u mentioned mysql_password in MySQL -- vars -- main.yaml
+remove it (don't store passwords in GitHub)
+
+open 40-databases repo -- write code to create MySQL instance
+get MySQL sg id from ssm parameter store by using data source
+write sg_rule -- to connect to MySQL from bastion
+20-sg-rules -- main.tf
+=======================
+# MySQL
+resource "aws_security_group_rule" "mysql_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.mysql_sg_id
+}
+
+create r53 record for MySQL
+manually create mysql_password in ssm parameter store
+during config of MySQL using playbook -- while setting root password -- it throws error like failed to import the required python library (botocore and boto3)
+we need to install botocore and boto3 in MySQL server
+in ansible-roboshop-roles-tf -- roles -- MySQL -- tasks -- main.yaml
+write code
+main.yaml
+=========
+- name: install botocore and boto3
+  ansible.builtin.pip:
+    name: "{{ item }}"
+    executable: pip3.9
+  loop:
+  - boto3
+  - botocore
+after doing changes in ansible-roboshop-roles-tf -- we have to pull those changes into MySQL server again
+and run again
+ansible playbook runs in MySQL server -- MySQL instance tries to get password from ssm parameter store --but MySQL instance has no access to it
+we have to attach a role to MySQL -- by using that role -- it can get the password from ssm parameter store
+
+now we have to create one role -- attach iam policy it -- it can get the ssm parameter of MySQL password
+create instance_profile & attch it to MySQL instance
+
+search -- aws iam role terraform
+iam role naming convention is like -- Roboshop-Dev-MySQL
+first letter is caps and uses - in between words
+to get first letter as capital -- we can use title function
+we have to give quotes before words and combine the words with -
+
+
+title Function
+==============
+title converts the first letter of each word in the given string to uppercase. The title function does not change any other letters in the string.
+
+Examples
+> title("hello world")
+Hello World
+
+we have to give quotes before words and combine the words with -
+mysql_role_name = join("-", [
+ for name in ["${var.project}","${var.environment}", "mysql"] :title(name)])
+#Roboshop-Dev-Mysql will be the role name
+
+this is useful when u to want to give access to only one parameter i.e mysql-password
+we r creating this to access MySQL pwd from ssm parameter store
+now we have to create policy (means permissions)
+open iam -- policies -- select service -- systems manager -- select describe parameters (for viewing) & get parameter (to get password) -- resources -- specific -- parameter -- <arn-of-mysql-password> -- next -- give policy name -- RoboshopDevMysql -- create policy 
+policies -- select RoboshopDevMysql -- permissions -- json
+copy that json code
+store that json code as mysql-iam-policy.json in 40-databases
+
+search -- aws iam policy terraform
+get that code from internet
+give a name to that policy & in aws_iam_policy code mention policy as file name like this --  policy = file("mysql-iam-policy.json")
+now we have to attach iam policy to MySQL instance
+search -- aws role policy attachment terraform
+we have to write code for iam_role_policy_attachment 
+create instance profile & attach that to instance
+by this we can successfully configure MySQL using terraform
+ 
+
+40-databases 
+=============
+
+main.tf
+========
+resource "aws_instance" "mysql" {
+  ami           = local.ami_id
+  instance_type = "t3.micro"
+  subnet_id = local.database_subnet_id
+  vpc_security_group_ids = [local.mysql_sg_id]
+  iam_instance_profile = aws_iam_instance_profile.mysql.name
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-mysql"
+    },
+    local.common_tags
+  )
+}
+
+resource "terraform_data" "mysql" {
+  triggers_replace = [
+    aws_instance.mysql.id
+  ]
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    password = "DevOps321"
+    host     = aws_instance.mysql.private_ip
+  }
+
+  provisioner "file" {
+    source      = "bootstrap.sh" # Local file path
+    destination = "/tmp/bootstrap.sh"    # Destination path on the remote machine
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+        "chmod +x /tmp/bootstrap.sh",
+        "sudo sh /tmp/bootstrap.sh mysql ${var.environment}"
+    ]
+  }
+}
+
+resource "aws_instance" "rabbitmq" {
+  ami           = local.ami_id
+  instance_type = "t3.micro"
+  subnet_id = local.database_subnet_id
+  vpc_security_group_ids = [local.rabbitmq_sg_id]
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-rabbitmq"
+    },
+    local.common_tags
+  )
+}
+
+resource "terraform_data" "rabbitmq" {
+  triggers_replace = [
+    aws_instance.rabbitmq.id
+  ]
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    password = "DevOps321"
+    host     = aws_instance.rabbitmq.private_ip
+  }
+
+  provisioner "file" {
+    source      = "bootstrap.sh" # Local file path
+    destination = "/tmp/bootstrap.sh"    # Destination path on the remote machine
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+        "chmod +x /tmp/bootstrap.sh",
+        "sudo sh /tmp/bootstrap.sh rabbitmq ${var.environment}"
+    ]
+  }
+}
+
+r53.tf
+======
+resource "aws_route53_record" "mysql" {
+  zone_id = var.zone_id
+  name    = "mysql-${var.environment}.${var.domain_name}"
+  type    = "A"
+  ttl     = "1"
+  records = [aws_instance.mysql.private_ip]
+  allow_overwrite = true
+}
+
+resource "aws_route53_record" "rabbitmq" {
+  zone_id = var.zone_id
+  name    = "rabbitmq-${var.environment}.${var.domain_name}"
+  type    = "A"
+  ttl     = "1"
+  records = [aws_instance.rabbitmq.private_ip]
+  allow_overwrite = true
+}
+
+locals.tf
+==========
+locals {
+    ami_id =  data.aws_ami.joindevops.id
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+    # public subnet in 1a AZ
+    database_subnet_id = split(",", data.aws_ssm_parameter.database_subnet_ids.value)[0]
+    mongodb_sg_id = data.aws_ssm_parameter.mongodb_sg_id.value
+    redis_sg_id = data.aws_ssm_parameter.redis_sg_id.value
+    mysql_sg_id = data.aws_ssm_parameter.mysql_sg_id.value
+    rabbitmq_sg_id = data.aws_ssm_parameter.rabbitmq_sg_id.value
+    mysql_role_name = join("-", [
+            for name in ["${var.project}","${var.environment}", "mysql"] : title(name)
+        ])
+    mysql_policy_name = join("", [
+            for name in ["${var.project}","${var.environment}", "mysql"] : title(name)
+        ])
+
+}
+
+data.tf
+========
+data "aws_ssm_parameter" "mysql_sg_id" {
+    name = "/${var.project}/${var.environment}/mysql_sg_id"
+}
+
+data "aws_ssm_parameter" "rabbitmq_sg_id" {
+    name = "/${var.project}/${var.environment}/rabbitmq_sg_id"
+}
+
+bootstrap.sh
+============
+#!/bin/bash
+
+component=$1
+environment=$2
+dnf install ansible -y
+
+cd /home/ec2-user
+git clone https://github.com/daws-88s/ansible-roboshop-roles-tf.git
+
+cd ansible-roboshop-roles-tf
+git pull
+ansible-playbook -e component=$component -e env=$environment roboshop.yaml
+
+iam.tf
+======
+resource "aws_iam_role" "mysql" {
+  name = local.mysql_role_name #Roboshop-Dev-Mysql
+
+  # Terraform's "jsonencode" function converts a
+  # Terraform expression result to valid JSON syntax.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = merge(
+    {
+        Name = local.mysql_role_name
+    },
+    local.common_tags
+  )
+}
+
+resource "aws_iam_policy" "mysql" {
+  name        = local.mysql_policy_name
+  description = "A policy for MySQL Ec2 instance"
+  # policy      = file("mysql-iam-policy.json")
+  policy      = templatefile("mysql-iam-policy.json", {
+                environment = var.environment
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "mysql" {
+  role       = aws_iam_role.mysql.name
+  policy_arn = aws_iam_policy.mysql.arn
+}
+
+resource "aws_iam_instance_profile" "mysql" {
+  name = "${var.project}-${var.environment}-mysql"
+  role = aws_iam_role.mysql.name
+}
+
+mysql-iam-policy.json
+======================
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": "ssm:GetParameter",
+            "Resource": "arn:aws:ssm:us-east-1:160885265516:parameter/roboshop/${environment}/mysql_root_password"
+        },
+        {
+            "Sid": "VisualEditor1",
+            "Effect": "Allow",
+            "Action": "ssm:DescribeParameters",
+            "Resource": "*"
+        }
+    ]
+}
+
+
+from bastion run
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+test port is opened or not on MySQL server by using below command
+ssh ec2-user@mysql-dev.sowjanya.fun 'netstat -lntp'
+give password -- in output u should see 3306 port
+
+we can parametarize env names in iam-policy name & ssm parameters by using place holders
+by using place holders -- env becomes variable -- to pass the value to variable we have to use templates & use variable notation 
+policy      = templatefile("mysql-iam-policy.json", {
+                environment = var.environment
+
+instead of env name use ${environment} in iam policy name 
+in bootstrap also -- we can pass environment variable
+pass this env name drom provisioner remote-exec
+
+MySQL -- vault.yaml -- also -- instead of dev use {{ environment }}
+while using this ansible code in prod -- environment is prod -- so that prod value is passed
+be careful while using templates & place holders
+
+lets see creation of RabbitMQ
+fetch rabbiotmq_sg_id from ssm parameter store by using data source
+we can store RabbitMQ username & password in ssm parameter store & fetch from there otherwise pass them directly from roboshop-ansible-roles-tf -- RabbitMQ -- tasks -- main.yaml -- as it is 
+create RabbitMQ like MySQL
+in sg-rules -- allow 22 port from RabbitMQ to bastion
+create r53 record for RabbitMQ
+upto now we have created all databases in our project
+
+delivery manager -- features should be delivered on time
+client business analyst -- collects market trends
+IT business Analyst -- collects data from client business analyst
+these data will be converted into technical requirements with help of team members (architects + managers + team leads)
+
+rules -- 
+delivery manager -- when changes come in frontend --  request goes to frontend team lead -- frontend team members
+delivery manager -- when changes come in backend --  request goes to backend team lead -- backend team members
+delivery manager -- when changes come in database --  request goes to database team lead -- database team members
+they will check the team members are available or not -- and he is occupied or not
+
+load balancer -- is like delivery manager
+target group is group of instances -- team members
+LB rules -- rules
+Listener -- 80/443
+health check -- availablility check
+when passing traffic to an instance -- we should check the instance is running or not & whether it is available or not
+consider LB contains 4 instances -- queries for running instances -- assigns traffic to instances using round-robbin algorithm
+team member -- ec2 instances
+LB checks the rules -- before passing the request -- consider that we are in frontend -- u clicked on catalogue -- request will be passed to catalogue instance
+
+on private LB -- we will allow 80 port
+on publice LB -- we will allow 443 port
+
+we will know traffic -- check cpu utilization -- if cpu-utlization > 80 -- server is busy
+if traffic is increased -- auto scaling -- creates new instances by using launch template & add to target group
+when instance added to target group -- it will handles the traffic
+launch template -- contains parameters required to launch instance (ami , sg , name etc)
+
+if cpu-utlization < 80 -- server is free
+auto scaling -- terminates the instances
+auto scaling may increase or decrease the no.of instances based on avg cpu utilization
+
+instances will be destroyed -- after completion of serving current requests
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+  

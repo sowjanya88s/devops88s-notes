@@ -1,0 +1,414 @@
+we will launch instances by using bastion host & we use bastion host to connect to instances
+
+in companies we will create a separate instance to launch instances
+but we use bastion host to connect to those instances
+
+to run terraform commands from bastion host -- we need below accesses
+1. s3 access for state file retrieval , creation , update
+2. we need ec2 instance creation access
+3. r53 entries creation , deletion , update
+we need to create policies for all these things -- attach the policies to iam role 
+
+for now we r giving administrator access -- 
+open 30-bastion -- main.tf
+==========================
+resource "aws_iam_role_policy_attachment" "bastion" {
+  role       = aws_iam_role.bastion.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+firstly create infra 
+open gitabsh --
+for i in 00-vpc/ 10-sg/ 20-sg-rules/ 30-bastion/ ; 
+do cd $i ; 
+terraform apply -auto-approve ; 
+cd .. ; 
+done
+
+creates in infra by going into all folders
+
+now lets see creation of databases
+lets see creation of mongodb for that we need data source
+we need to create mongodb in database subnet id -- to get database subnet id & mongodb-sg-id
+declare variables in locals to retrieve the values of database subnet id & mongodb-sg-id
+in main.tf -- write code to launch instance
+next we need to connect to the mongodb instance  & configure the instance -- for that use remote-exec provisioner & write connection block inside it
+we have to create r53 record
+
+previously it is called as null resource , now it is deprecated 
+there is one concept in terraform i.e -- terraform data 
+terraform data -- it does not actually creates the resources , but it implements the standard resource lifecycle. means it can perform delete & update operations on resource.
+we can use terraform data to configure instance using local-exec & remote-exec. means it can perform delete & update operations on resource
+this is useful when we want to take connection to an instance 
+we can also write connection block inside ec2 creation code but with terraform data , if we want to handle instance launch & instance deletion separately we can use terraform data . we have one option in terraform data -- 
+triggers_replace -- by this we can decide which one to trigger the configuration again 
+triggers_replace --  whenever instance id changes -- means present instance is deleted & new instance is created , in this case -- by using triggers_replace option -- we write a condition -- when instance id changes -- reconfigure that instance
+
+todo remote-exec -- we need connection block
+in connection block -- we have to mention type of the connection , username , password & private ip
+
+write one script -- bootstrap.sh
+
+connecting to mongodb
+install ansible inside bastion -- connect to mongodb
+we can use bastion as ansible controller because it has access to port 22 of mongodb
+or else install ansible mongodb & configure it as localhost
+
+copy bootstrap.sh into mongodb & execute through remote exec
+bootstrap.sh
+=============
+install ansible & configure it using playbooks
+to copy the script into mongodb -- use file provisioner
+in file provisioner -- mention source -- current location of script 
+destination -- where to paste this script -- /tmp/bootstrap.sh
+
+now we need to execute the script -- 
+in remote-exec -- inline -- we can write multiple commands here
+mention commands to give execute access to this script & run the script
+
+create folder inside roboshop-infra-dev -- 40-databases -- provider.tf
+
+provider.tf
+============
+copy provider.tf here
+
+main.tf
+======
+resource "aws_instance" "mongodb" {
+  ami           = local.ami_id
+  instance_type = "t3.micro"
+  subnet_id = local.database_subnet_id
+  vpc_security_group_ids = [local.mongodb_sg_id]
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-mongodb"
+    },
+    local.common_tags
+  )
+}
+
+resource "terraform_data" "mongodb" {
+  triggers_replace = [
+    aws_instance.mongodb.id
+  ]
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    password = "DevOps321"
+    host     = aws_instance.mongodb.private_ip
+  }
+
+  provisioner "file" {
+    source      = "bootstrap.sh" # Local file path
+    destination = "/tmp/bootstrap.sh"    # Destination path on the remote machine
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+        "chmod +x /tmp/bootstrap.sh",
+        "sudo sh /tmp/bootstrap.sh mongodb "
+    ]
+  }
+}
+
+resource "aws_instance" "redis" {
+  ami           = local.ami_id
+  instance_type = "t3.micro"
+  subnet_id = local.database_subnet_id
+  vpc_security_group_ids = [local.redis_sg_id]
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-redis"
+    },
+    local.common_tags
+  )
+}
+
+resource "terraform_data" "bootstrap_redis" {
+  triggers_replace = [
+    aws_instance.redis.id
+  ]
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    password = "DevOps321"
+    host     = aws_instance.redis.private_ip
+  }
+
+  provisioner "file" {
+    source      = "bootstrap.sh" # Local file path
+    destination = "/tmp/bootstrap.sh"    # Destination path on the remote machine
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+        "chmod +x /tmp/bootstrap.sh",
+        "sudo sh /tmp/bootstrap.sh redis "
+    ]
+  }
+}
+
+  
+data.tf
+=======
+data "aws_ami" "joindevops" {
+  most_recent      = true
+  owners           = ["973714476881"]
+
+  filter {
+    name   = "name"
+    values = ["Redhat-9-DevOps-Practice"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_ssm_parameter" "database_subnet_ids" {
+    name = "/${var.project}/${var.environment}/database_subnet_ids"
+}
+
+data "aws_ssm_parameter" "mongodb_sg_id" {
+    name = "/${var.project}/${var.environment}/mongodb_sg_id"
+}
+
+data "aws_ssm_parameter" "redis_sg_id" {
+    name = "/${var.project}/${var.environment}/redis_sg_id"
+}
+
+
+locals.tf
+=========
+locals {
+    ami_id =  data.aws_ami.joindevops.id
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+    # public subnet in 1a AZ
+    database_subnet_id = split(",", data.aws_ssm_parameter.database_subnet_ids.value)[0]
+    mongodb_sg_id = data.aws_ssm_parameter.mongodb_sg_id.value
+    redis_sg_id = data.aws_ssm_parameter.redis_sg_id.value
+    mysql_sg_id = data.aws_ssm_parameter.mysql_sg_id.value
+    rabbitmq_sg_id = data.aws_ssm_parameter.rabbitmq_sg_id.value
+}
+
+route53.tf
+==========
+resource "aws_route53_record" "mongodb" {
+  zone_id = var.zone_id
+  name    = "mongodb-${var.environment}.${var.domain_name}"
+  type    = "A"
+  ttl     = "1"
+  records = [aws_instance.mongodb.private_ip]
+  allow_overwrite = true
+}
+
+resource "aws_route53_record" "redis" {
+  zone_id = var.zone_id
+  name    = "redis-${var.environment}.${var.domain_name}"
+  type    = "A"
+  ttl     = "1"
+  records = [aws_instance.redis.private_ip]
+  allow_overwrite = true
+}
+
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+bootstrap.sh
+============
+#!/bin/bash
+
+component=$1
+environment=$2
+dnf install ansible -y
+
+cd /home/ec2-user
+git clone https://github.com/daws-88s/ansible-roboshop-roles-tf.git
+
+cd ansible-roboshop-roles-tf
+git pull
+ansible-playbook -e component=$component -e env=$environment roboshop.yaml
+
+
+push the code to git & connect to bastion host
+clone 40-databases repo
+cd 40-databases
+
+install terraform in bastion host
+search -- install terraform in Linux
+sudo yum install -y yum-utils
+sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+sudo yum -y install terraform
+
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+we have ansible playbooks
+we have to call mongodb 
+create another git repo -- ansible-roboshop-roles-tf
+copy ansible-roboshop-roles data into ansible-roboshop-roles-tf
+in ansible-roboshop-roles-tf -- roboshop.yaml
+what should be the host -- localhost
+we have installed ansible in mongodb only
+open inventory.ini
+[mongodb]
+localhost
+pass component name & env name form provisioner
+comment log path in ansible.cfg
+push the code into database
+
+now login to bastion host
+git clone <https-url-of-40-databases>
+cd 40-databases
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+by this bastion host creates mongodb instance & copies the file inside mongodb by using connection block & then executes the script
+
+
+in output u can see first instance will be created with name roboshop-dev-mongodb  & r53 record will be created & then installs ansible & bootstrap script will be executed
+
+check mongodb is running or not
+connect to mongodb by using bastion
+ssh ec2-user@<private-ip-of-mongodb>
+netstat -lntp
+we should see 27017 port in output
+
+along with instance we should create r53 record
+search -- aws r53 record terraform
+place zone_id & domain_name in variables -- take these from ur hosted zone
+change ip address & domain name in code
+mention allow_override as true -- it will replaces the already existing records
+
+similarly create redis , get sg_id of redis by using data source
+
+before creating redis instance -- in sg of redis allow connections on 22 port from bastion
+
+20-sg-rules -- main.tf 
+======================
+# Redis
+resource "aws_security_group_rule" "redis_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.redis_sg_id
+}
+
+now redis instance will be created with name roboshop-dev-redis , r53 record will be created  and configured
+ 
+check redis port is opened or not by using below command --
+ssh ec2-user@redis-dev.sowjanya.fun 'netstat -lntp' 
+give pwd 
+u can connect -- in output u can see 6379 port will be opened
+
+
+by this bastion host creates mongodb instance & copies the file inside mongodb by using connection block & then executes the script
+
+we r installing terraform inside 40-databases
+terraform provider takes 832 mb 
+we r writing it in /home/ec2-user
+we need to create 4 db's
+4 * 832MB = 3.6 GB
+but /home contains only 960 MB , which is not enough
+we have to increase that partition
+
+search -- aws instance terraform
+we can increase the memory using root_block_device
+during the creation of instance only -- we can mention root_block_device 
+in root_block_device mention -- volume size (50gb) & volume type (gp3)
+we can mention tags for root_block_device
+in 50gb -- only 20gb is partitioned & remaining 30gb we need to extend using below commands
+
+
+we have to extend this volume
+commands --
+growpart <dev-name-of-partition> <partition-number>
+lvextend -r -L+30g <volume-group-name> (resize)
+xfs_growfs /home
+ 
+mention these volume extend commands & commands to install terraform in bastion.sh -- place this file in user_data
+by that during instance creation only this script will executes
+for simple things we can use user_data
+
+open 30-bastion -- create new file -- bootstrap.sh
+
+bootstrap.sh
+=============
+#!/bin/bash
+
+# We are creating 50GB root disk, but only 20GB is partitioned
+# Remaining 30GB we need to extend using below commands
+growpart /dev/nvme0n1 4
+lvextend -r -L +30G /dev/mapper/RootVG-homeVol
+xfs_growfs /home
+
+yum install -y yum-utils
+yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+yum -y install terraform
+
+user-data
+=========
+1. once the system is provisioned , aws executes the commands inside user_data
+2. if user_data script is failed , terraform is not aware. terraform is still success
+3. since AWs runs user_data we can't get immediate log
+4. useful for simple installations
+5. we can check the logs at 
+
+provisioner
+===========
+1. it is terraform resource
+2. if remote-exec is failed , terraform also failed
+3. we can get immediate log on the console about what is going on
+
+for complex things use remote provisioners
+
+now destroy the bastion 
+and recreate the bastion again -- using terraform 
+this time the server will be configured with bootstrap.sh
+after logging in we can check user_data logs at -- /var/log/cloud-init-output.log
+/home will be allocated with 31 gb
+
+
+
+
+
+
+
+
+
+

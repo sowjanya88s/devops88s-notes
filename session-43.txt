@@ -1,0 +1,450 @@
+firstly create infra
+open gitbash
+for i in 00-vpc/ 10-sg/ 20-sg-rules/ 30-bastion/ 50-backend-alb/ ; do cd $i ; terraform apply -auto-approve ; cd .. ; done
+
+connect to bastion host using its public ip
+clone ansible-roboshop-roles-tf
+cd ansible-roboshop-roles-tf
+configure databases
+
+for load balancer AWS does not allows 22 port because in background it runs as multiple instances in two az's (we have allowed LB in two az's)
+Load balancer condition -- it should run on atleast 2 az's
+so we have allowd port 80 from bastion to backend alb
+
+now we will automate the creation of catalogue instances
+while creation of catalogue instance we have discussed 2 approaches yesterday
+in 1st option -- when traffic increases & new instances are created with v3 along with old , we need to connect to those new instances & we have to update the latest version in that new instances too
+this approach has zero downtime
+disadvantage -- at same point of time , our app serves 2 versions(because we r updating instances batchwise)
+
+in 2nd option -- when traffic increases , we can create instances using AMI with latest version (there will be no downtime , downtimes is only from AWS while launching the new instance)
+
+lets use 2nd approach now
+get ami_id of redhat-devops by using data source
+create catalogue instance in private-subnet-1a , use data source to get private subnet id & refer it by using locals
+get catalogue_sg_id by using data source & refer it by using locals
+use terraform-data to configure catalogue
+write connection block inside it & write triggers_replace & write bootstrap.sh file to configure catalogue instance & write remote-exec to provision catalogue instance remotely from bastion host
+pass env & component name in remote-exec
+mention ansible-roboshop-roles.tf repo's http url in bootstrap.sh
+check all the code once in ansible-roboshop-roles.tf
+
+after completion of config in catalogue instance -- 
+connect to catalogue from bastion --
+netstat -lntp
+curl http://localhost:8080/health
+
+we have to take ami of that instance
+to take ami there is no need to stop the instance but when the instance is in running state there is a chance of coming new changes in that instance an those changes will not be captured perfectly
+when the instance is in stopped state -- it will be in stable state -- we can get AMI perfectly
+so firstly stop the instance & take ami of the catalogue instance then
+search -- aws stop instance terraform
+mention instance id & state in it
+
+search -- aws instance ami terraform
+mention instance name & instance name in it
+
+manual procedure to take ami -- select instance -- image and templates -- create image
+
+last time we have discussed about depends_on
+terraform usually creates all resources parallelly
+terraform-data depends on catalogue instance because while configuring catalogue we need ip of catalogue
+aws_ec2_insatnce_state depends on aws_instance
+after creation of ec2 instance -- terraform_data & aws_ec2_instance_state both will be triggered
+when configuring instance will be stopped but we need to stop the instance after completion of configuration
+in this situation -- we have an option -- depends_on -- mention value of depends on as terraform_data.catalogue
+by this after the config of catalogue only instance will be stopped
+after completely stopping the instance only we need to take the ami of catalogue instance -- write condition for that
+to stop the instance usually takes upto one minute
+to take ami -- takes upto 3 mins
+
+now we need to create target group & launch template -- this will become input to autoscaling group
+we need to create target group and ask autoscaling to launch instances into target group
+create a rule in listener for catalogue
+after creation of catalogue instance only we need to create the rule -- otherwise requests will fail
+
+terraform needs instances with running state
+but the instance is stopped , if u run terraform again -- terraform checks instance existence only
+
+lets see creation of target group & launch template by using terraform
+search -- aws target group terraform
+mention port 8080 & name for target group
+use data source to get vpc id & refer it from locals.tf
+mention deregistration delay  
+mention health check parameters like path & healthy threshold & unhealthy threshold & timeout & interval & success codes as matcher & port & protocol
+
+lets see creation of launch template by using terraform
+mention name & image id as recently created
+mention instance_initiated_shutdown_behaviour as terminate , by this once auto scaling sees less traffic, it will terminate the instances
+mention instance type & mention sg id & give tags for instances & volumes & launch template
+mention update_default _version as true because each time we apply terraform new version will be updated as default 
+
+lets see creation of auto scaling group by using terraform
+search -- aws auto scaling group terraform
+mention name for  auto scaling group 
+mention max size & min_size & grace period for health check & desired capacity 
+force_delete is false means it waits until the instances in auto scaling group are terminated
+launch_configuration (old) & launch_template are same , use only one
+use  launch_template mention id & version in it
+mention private subnet id here
+mention target_group_arn by this auto scaling group places instances in target group
+mention tag  
+
+
+steps
+=====
+launch catalogue instance
+configure the catalogue
+stop the instance
+take ami
+create target group
+create launch template
+create auto scaling group
+create rule in listener for catalogue
+
+
+
+open roboshop-infra repo -- create one repo -- 60-catalogue
+provider.tf
+===========
+copy provider here
+
+main.tf
+========
+resource "aws_instance" "catalogue" {
+  ami           = local.ami_id
+  instance_type = "t3.micro"
+  subnet_id = local.private_subnet_id
+  vpc_security_group_ids = [local.catalogue_sg_id]
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-catalogue"
+    },
+    local.common_tags
+  )
+}
+
+resource "terraform_data" "catalogue" {
+  triggers_replace = [
+    aws_instance.catalogue.id
+  ]
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    password = "DevOps321"
+    host     = aws_instance.catalogue.private_ip
+  }
+
+  provisioner "file" {
+    source      = "bootstrap.sh" # Local file path
+    destination = "/tmp/bootstrap.sh"    # Destination path on the remote machine
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+        "chmod +x /tmp/bootstrap.sh",
+        "sudo sh /tmp/bootstrap.sh catalogue ${var.environment} ${var.app_version}"
+    ]
+  }
+}
+
+resource "aws_ec2_instance_state" "catalogue" {
+  instance_id = aws_instance.catalogue.id
+  state       = "stopped"
+  depends_on = [terraform_data.catalogue]
+}
+
+resource "aws_ami_from_instance" "catalogue" {
+  # roboshop-dev-catalogue-v3-i-h468sghy
+  name               = "${var.project}-${var.environment}-catalogue-${var.app_version}-${aws_instance.catalogue.id}"
+  source_instance_id = aws_instance.catalogue.id
+  depends_on = [aws_ec2_instance_state.catalogue]
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-catalogue"
+    },
+    local.common_tags
+  )
+}
+
+resource "aws_lb_target_group" "catalogue" {
+  name     = "${var.project}-${var.environment}-catalogue"
+  port     = 8080
+  protocol = "HTTP"
+  vpc_id   = local.vpc_id
+  deregistration_delay = 60
+
+  health_check {
+    healthy_threshold = 2
+    interval = 10
+    matcher = "200-299"
+    path = "/health"
+    port = 8080
+    protocol = "HTTP"
+    timeout = 2
+    unhealthy_threshold = 3
+  }
+}
+
+resource "aws_launch_template" "catalogue" {
+  name = "${var.project}-${var.environment}-catalogue"
+  image_id = aws_ami_from_instance.catalogue.id
+
+  # once autoscaling sees less traffic, it will terminate the instance
+  instance_initiated_shutdown_behavior = "terminate"
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [local.catalogue_sg_id]
+
+  # each time we apply terraform this version will be updated as default
+  update_default_version = true
+  
+  # tags for instances created by launch template through autoscaling
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = merge(
+        {
+            Name = "${var.project}-${var.environment}-catalogue"
+        },
+        local.common_tags
+    )
+  }
+  # tags for volumes created by instances
+  tag_specifications {
+    resource_type = "volume"
+
+    tags = merge(
+        {
+            Name = "${var.project}-${var.environment}-catalogue"
+        },
+        local.common_tags
+    )
+  }
+  # tags for launch template
+  tags = merge(
+        {
+            Name = "${var.project}-${var.environment}-catalogue"
+        },
+        local.common_tags
+    )
+}
+
+
+locals.tf
+=========
+locals {
+  vpc_id = data.aws_ssm_parameter.vpc_id.value
+  catalogue_sg_id = data.aws_ssm_parameter.catalogue_sg_id.value
+  ami_id = data.aws_ami.joindevops.id
+  private_subnet_id = split(",", data.aws_ssm_parameter.private_subnet_ids.value)[0]
+  common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+}
+
+varaibles.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+variable "app_version" {
+    default = "v3"
+}
+
+data.tf
+=======
+data "aws_ami" "joindevops" {
+  most_recent      = true
+  owners           = ["973714476881"]
+
+  filter {
+    name   = "name"
+    values = ["Redhat-9-DevOps-Practice"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_ssm_parameter" "catalogue_sg_id" {
+    name = "/${var.project}/${var.environment}/catalogue_sg_id"
+}
+
+data "aws_ssm_parameter" "vpc_id" {
+    name = "/${var.project}/${var.environment}/vpc_id"
+}
+
+data "aws_ssm_parameter" "private_subnet_ids" {
+    name = "/${var.project}/${var.environment}/private_subnet_ids"
+}
+
+
+bootstrap.sh
+============
+#!/bin/bash
+
+component=$1
+environment=$2
+app_version=$3
+dnf install ansible -y
+
+cd /home/ec2-user
+git clone https://github.com/daws-88s/ansible-roboshop-roles-tf.git
+
+cd ansible-roboshop-roles-tf
+git pull
+ansible-playbook -e component=$component -e env=$environment -e app_version=$app_version roboshop.yaml
+
+connect to bastion host
+clone roboshop-infra repo
+cd 60-catalogue
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+firstly create target group manually
+name -- roboshop-dev-catalogue
+port -- http -- 8080
+health check -- /health
+healthy threshold -- 2
+unhealthy threshold -- 2
+timeout -- 5 sec
+interval -- 10 secs
+success code -- 200-299
+we will add targets later into target group
+
+lets see creation of launch template manually
+launch template -- create launch template
+name -- roboshop-dev-catalogue
+description -- dev server for catalogue
+application and os images -- my AMI's -- owned by me -- roboshop-dev-catalogue
+instance type -- t3.micro
+key-pair -- don't include in launch template
+network settings -- don't include in launch template
+security group -- roboshop-dev-catalogue
+resource tags -- key -- Name & value -- roboshop-dev-catalogue & resource types -- instances
+key -- Name & value -- roboshop-dev-catalogue & resource types -- volumes
+click on create launch template
+
+if u do any changes in launch template -- it will creates a new version of launch template
+along with instance , volume will created with name roboshop-dev-catalogue as we mentioned in tags
+
+
+lets see creation of auto scaling group manually
+auto scaling group job is to create & delete the instances by using launch template
+ec2 -- auto scaling group -- create auto scaling group 
+step 1 -- name -- roboshop-dev-catalogue
+launch template -- select roboshop-dev-catalogue template
+version -- latest(1)
+step 2 -- network -- vpc -- roboshop-dev
+az -- roboshop-dev-private-us-east-1a
+we can see two az's here 1a & 1b 
+but within 1a -- for all requests data is free because they are all in one az because 1a lies in one data centre
+1b is another data centre
+when 1a communicates with 1b -- aws charges for data transfer
+companies does not cares about those data charges they need high availability
+so we acn select 2 az's here -- if we want to create 2 instances then one will be created in 1a & other will be created in 1b
+az zone distribution -- balanced best effort
+
+step 3 -- load balancing -- attach to existing load balancer target group
+ attach to existing load balancer target group -- choose from ur load balancer target groups -- existing load balancer target group -- roboshop-catalogue
+health check grace period -- 120 sec
+
+we r telling to launch instances using launch template (roboshop-dev-catalogue) and to add instances in target group (roboshop-dev-catalogue)
+
+after how much time we have to wait to perform health check on newly launched instance
+
+step 4 -- group size -- desired capacity -- 1
+scaling -- min -- 1 & max -- 10
+automatic scaling -- choose whether to use a target tracking policy -- target tracking scaling policy -- 
+scaling policy name -- target tracking policy
+metric type -- avg cpu utilization
+target value -- 70
+instance warmup -- 120 sec
+instance maintenance policy -- no policy
+keep remaining all as default
+
+step 5 -- next
+step 6 -- next
+step 7 -- create auto scaling group
+
+after creation , it immediately starts launching instance for catalogue in us-east-1a
+
+
+min -- at any point of time how many instances u want
+desired -- how many u want right now
+max -- max instances autoscaling group can create
+if we mention min=2 , desired = 4 , max = 10 then auto scaling group creates 4 instances now -- it observes the traffic -- if traffic increases -- creates new instances and it can create upto 10 instances
+even after creating 10 instances , traffic increases -- check if everything is fine or not -- if fine we can increase the max instances count
+(sometimes if attacks happens , in that case also auto scaling increases the instance)
+creates 4 instances now -- it observes the traffic -- if traffic decreases -- deletes 2 instances & maintains only 2 instances min
+instance warmup -- after launching the instance how much time we need to wait to check cpu utilization
+deregistration delay -- completes existing requests in this time & then deletes the instance
+after termination of instances only auto scaling group will be deleted
+
+after instance are ready -- now we need to add rule in load balancer --
+ec2 -- load balancers -- roboshop-dev -- listeners and rules -- http:80 listener -- add rule
+conditions - host header -- 
+match pattern type -- value matching
+host header condition value -- catalogue.backend-alb-dev.sowjanya.fine
+actions -- routing action -- forward to target groups -- target group -- select roboshop-dev-catalogue target group -- next
+listener rules -- priority -- 10 -- next -- add rule
+
+now goto bastion --
+try to hit backend-alb
+command -- curl http://catalogue.backend-alb-dev.sowjanya.fun/health
+output -- {"app":"ok","mongo":true}
+command -- curl http://catalogue.backend-alb-dev.sowjanya.fun/categories
+output -- ["Artificial Intelligence" , "Robot"]
+
+
+note: to launch instances with diff instance types use mixed_insatnce_policy parameter in autoscaling group like below
+
+ mixed_instances_policy {
+    launch_template {
+      launch_template_specification {
+        launch_template_id = aws_launch_template.example.id
+      }
+
+      override {
+        instance_type     = "c4.large"
+        weighted_capacity = "3"
+      }
+
+      override {
+        instance_type     = "c3.large"
+        weighted_capacity = "2"
+      }
+    }
+  }
+
+when u want to update new verion of catalogue -- again new instance will be created  & we will configure latest version in that & stop instance & take ami & create new instances by using launch template
+
+we cannot auto scale the databases because they are stateful 
+
+
+

@@ -1,0 +1,434 @@
+create 00-vpc & 10-sg & 20-sg-rules & 30-bastion
+connect to bastion host
+create databases from it
+
+we use load balancer to distribute the load between multiple components
+listener -- listens to particular port
+generally load balancer listens on 80/HTTP , 443/HTTPS ports
+rules -- request from frontend comes to catalogue -- forwarded to catalogue target group
+target group -- a group of instances
+health check -- before sending request to particular instance -- LB performs health check on that instance ( checks whether the instance is active or not)
+if the instance is active then only request will be forwarded to that target group
+we have to use auto scaling also
+launch template -- contains info required to launch instance (ami-id , instance type , sg-id , vpc details)
+autoscaling -- uses launch template as input , can trigger instance if cpu utilisation is more than 70%
+
+lets create load balancer manually
+there are different types of load balancers
+ application load balancer -- it works on 7 layers and it can be used for HTTP & HTTPS traffic
+now we r going to create application load balancer
+ec2 -- load balancers -- application load balancer -- create
+load balancer name -- roboshop-dev-infra
+scheme -- internal
+load balancer ip address -- ipv4
+vpc -- select roboshop-dev vpc
+network mapping
+az's and subnets -- select us-east-1a & us-east-1b (select private subnets from 1a & 1b)
+to make load balancer highly available -- we have to select two az's
+select security group of backend-alb
+we have to take access on port number 80 from bastion to backend alb
+we can't take access of LB on port 22 & LB is completely managed by AWS
+listeners and routing
+listener -- private -- so http -- port number -- 80
+default action -- routing action -- fixed reponse -- 
+response code -- 200
+context type -- text/html
+response body -- <h1> hi, iam from backend HTTP ALB </h1>
+create load balancer
+
+lets create target group 
+ec2 -- target groups -- create target group -- 
+step 1
+======
+target type -- instances
+target group name -- roboshop-dev-catalogue
+protocol -- http
+port -- 8080 (we have to give catalogue port number here)
+ip address type -- ipv4
+vpc -- select roboshop-dev vpc
+protocol version -- http1
+health checks --
+health check protocol -- http
+health check path -- /health
+health check port -- traffic port
+healthy threshold -- 2
+(the no.of consecutive health checks successes required before considering an unhealthy target healthy)
+we will check health of instance
+command -- http://ip:8080/health
+3 success -- healthy
+2 failure -- not healthy
+unhealthy threshold -- 2
+timeout -- 5 seconds
+(we should get response within 5 sec after sending request regarding health check)
+interval -- 10 sec
+for every 10 seconds we should perform health checks
+success codes -- 200-299
+
+step 2
+======
+register targets -- we r not registering now (because we have not created catalogue instances upto now)
+
+step 3
+======
+review and create -- create target group
+
+upto now we have not registered targets , so if any one hits ALB we will get fixed response i.e -- <h1> hi, iam from backend HTTP ALB </h1>
+
+structure of creation LB 
+
+listener  -- LB -- 
+(listens on 80 port)
+
+in 20-sg-rules -- write rule to allow port 80 from bastion to backend-alb
+get backend alb sg-id by using data source & mention in locals
+
+
+20-sg-rules -- main.tf
+======================
+# Backend ALB
+resource "aws_security_group_rule" "backend_alb_bastion" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+wait until LB is active
+if LB comes to active state
+connect to bastion host -- check alb response
+curl http://<dns-name-of-LB>
+<h1> hi, iam from backend HTTP ALB </h1>
+the above request goes on port number 80 & so we got response
+
+environment is a reserved variable -- sometimes problems comes with that
+so mention environment as env in bastion.sh & while mentioning hosts and 
+and also while retrieving value from ssm parameter store as {{ env }}
+bootstrap.sh
+=============
+#!/bin/bash
+
+component=$1
+environment=$2
+dnf install ansible -y
+
+cd /home/ec2-user
+git clone https://github.com/daws-88s/ansible-roboshop-roles-tf.git
+
+cd ansible-roboshop-roles-tf
+git pull
+ansible-playbook -e component=$component -e env=$environment roboshop.yaml
+
+open repo -- ansible-roboshop-roles-tf
+
+
+group_vars/all.yaml
+===================
+ansible_user: ec2-user
+ansible_password: DevOps321
+MONGODB_HOST: mongodb-{{ env }}.daws88s.online
+REDIS_HOST: redis-{{ env }}.daws88s.online
+MYSQL_HOST: mysql-{{ env }}.daws88s.online
+RABBITMQ_HOST: rabbitmq-{{ env }}.daws88s.online
+CATALOGUE_HOST: catalogue.backend-alb-{{ env }}.daws88s.online
+USER_HOST: user.backend-alb-{{ env }}.daws88s.online
+CART_HOST: cart.backend-alb-{{ env }}.daws88s.online
+SHIPPING_HOST: shipping.backend-alb-{{ env }}.daws88s.online
+PAYMENT_HOST: payment.backend-alb-{{ env }}.daws88s.online
+app_version: v3
+
+how frontend calls LB -- *.backend-dev.sowjanya.fun
+in backend LB -- listeners and rules
+there is only one rule and that is default rule
+now we have to write some rules --
+if someone hits -- 
+catalogue.backend-dev.sowjanya.fun -- request should goto catalogue target group 
+user.backend-dev.sowjanya.fun -- request should goto user target group 
+load balancer should manage loads and it should be able to distribute the load
+
+now we have to create r53 record for backend-lb as *.backend-dev.sowjanya.fun
+goto r53 -- create A record -- 
+record name -- *.backend-dev.sowjanya.fun
+enable alias
+route traffic to -- alias to application and classic load balancer
+select ur region -- us-east-1
+dns name comes automatically  -- create records
+
+now connect to bastion-host 
+command -- curl http://catalogue.backend-dev.sowjanya.fun
+output -- <h1> hi, iam from backend HTTP ALB </h1>
+this request first hits -- listener of backend alb -- in rules -- we only have default rule -- that content is the output
+
+now create one instance -- catalogue
+with redhat-devops ami
+instance type -- t3.micro
+select roboshop-vpc
+select private subnet 1a in it
+select catalogue security group
+launch instance
+
+catalogue should accept traffic from backend alb on port 8080 & should accept traffic from bastion host on port 22
+
+write these rules in 20-sg-rules
+20-sg-rules -- main.tf
+======================
+# Catalogue
+resource "aws_security_group_rule" "catalogue_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.catalogue_sg_id
+}
+
+resource "aws_security_group_rule" "catalogue_backend_alb" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.backend_alb_sg_id
+  security_group_id = local.catalogue_sg_id
+}
+
+check all databases are running fine
+ssh ec2-user@mongodb-dev.sowjanya.fun 'netstat -lntp'
+
+now connect to catalogue instance using private ip from bastion
+ssh ec2-user@<pri-ip-of-catalogue>
+
+install ansible in catalogue
+yum install ansible -y
+
+now clone the ansible-roboshop-roles-tf into catalogue
+git clone <https-url-of-ansible-roboshop-roles-tf>
+cd ansible-roboshop-roles-tf
+
+configure catalogue now
+ansible-playbook -e component=catalogue -e env=dev roboshop.yaml
+
+after completion , 
+curl http://localhost:8080/health
+{"app":"ok","mongo":true}
+
+
+now goto backend-alb -- selct ur lb -- select listener -- rules -- add rule
+step-1
+=======
+listener -- 80
+name -- roboshop-dev-catalogue
+condition -- host header
+
+generally there will be two types of headers
+
+for ex: icicibank.com --- main host
+
+1. host path -- ex -- retailbanking.icicibanking.com
+2. context path -- ex -- icicibanking.com/retailbanking
+
+condition -- host header
+host header condition value -- catalogue.backend-alb-dev.sowjanya.fun
+actions -- forward to target group -- 
+target group -- roboshop-dev-catalogue -- next
+
+step-2
+======
+set rule priority -- listener rules -- priority -- 10 -- next
+(rule with low priority always wins)
+
+step-3
+=======
+review and create -- add rule
+
+now goto target group -- registered instances -- register targets -- select catalogue instance -- port -- 8080 -- include as pending below -- register pending targets
+
+now backend LB performs health check on it -- after catalogue comes to healthy status 
+
+
+now goto bastion-host -- 
+curl http://catalogue.backend-alb-dev.sowjanya.fun/health
+{"app":"ok","mongo":true}
+
+
+this request matches with LB record -- hits listener -- listener rules -- checks all rules -- matches with rule  catalogue.backend-alb-dev.sowjanya.fun -- request goes to catalogue 
+
+if there are no targets listeners for the rule -- u will get 503 service temporarily unavailable error 
+
+resource creation flow 
+when request comes -- catalogue.backend-alb-dev.sowjanya.fun
+r53 record catalogue.backend-alb-dev.sowjanya.fun -- goes to LB -- listener rule -- target group -- instances in target
+
+when u want to update the version of catalogue
+consider that we have 10 instances -- we need to change the version from v3 to v4
+we can connect to 10 instances parallelly & we can update the version
+in this process there will be downtime
+to decrease the downtime we need to use strategy  -- first update 4 instances & then 4 instances -- perform updates on instances batch wise
+1. this is called rolling update 
+to run a playbook -- we need 5 minutes 
+for 4 instances -- atleast 15 minutes
+
+2. create new instance -- download v4 and configure it 
+stop instance & take AMI
+by using that AMI create 4 instances & terminate 4 old instances
+
+which option is better ? 
+2nd option is better
+
+in 1st option -- when traffic increases & new instances are created with v3 along with old , we need to connect to those new instances & we have to update the latest version in that new instances too
+this approach has zero downtime
+disadvantage -- at same point of time , our app serves 2 versions(because we r updating instances batchwise)
+
+in 2nd option -- when traffic increases , we can create instances using AMI with latest version (there will be no downtime , downtimes is only from AWS while launching the new instance)
+
+lets see creation of backend-alb using terraform
+open roboshop-infra repo -- create new repo -- 50-backend-alb
+copy provider.tf into it
+
+components required for alb --
+load balancer
+listener
+r53 record
+
+create instance
+configure it & stop it
+create AMI & create target group
+add instance to target group
+create ALB rule -- catalogue.alb_url
+
+search -- aws alb terraform
+get alb-sg-id by using data source & refer its value from locals.tf
+we want to create backend-alb in private subnet & get private subnet ids by using data source & refer it using locals.tf
+mention two subnets during creation of backend-alb
+keep deletion_protection as false (if its value is true -- we cannot delete the alb using terraform & using GUI too)
+mention load balancer type as application
+
+now we need to create LB listener
+search -- aws alb listener
+create http listener
+define default action as fixed response
+mention message body in it as <h1>Hi, I am from HTTP Backend ALB</h1>
+this listener will be attached to backend alb
+
+now create r53 record
+search -- aws r53 record terraform 
+serach for alias in it
+mention backend lb dns name in it
+mention zone id here
+before creation of record -- it checks backend LB is created or not
+
+
+main.tf
+========
+resource "aws_lb" "backend_alb" {
+  name               = "${var.project}-${var.environment}" # roboshop-dev
+  internal           = true
+  load_balancer_type = "application"
+  security_groups    = [local.backend_alb_sg_id]
+  subnets            = local.private_subnet_ids
+
+  # keeping it as false, just to delete using terraform while practice
+  enable_deletion_protection = false
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}"
+    },
+    local.common_tags
+  )
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.backend_alb.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/html"
+      message_body = "<h1>Hi, I am from HTTP Backend ALB</h1>"
+      status_code  = "200"
+    }
+  }
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = var.zone_id
+  name    = "*.backend-alb-${var.environment}.${var.domain_name}"
+  type    = "A"
+  
+  # load balancer details
+  alias {
+    name                   = aws_lb.backend_alb.dns_name
+    zone_id                = aws_lb.backend_alb.zone_id
+    evaluate_target_health = true
+  }
+}
+
+varaibles.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+locals.tf
+=========
+locals {
+  backend_alb_sg_id = data.aws_ssm_parameter.backend_alb_sg_id.value
+  private_subnet_ids = split(",", data.aws_ssm_parameter.private_subnet_ids.value)
+  common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+}
+
+data.tf
+=======
+data "aws_ssm_parameter" "backend_alb_sg_id" {
+    name = "/${var.project}/${var.environment}/backend_alb_sg_id"
+}
+
+data "aws_ssm_parameter" "private_subnet_ids" {
+    name = "/${var.project}/${var.environment}/private_subnet_ids"
+}
+
+
+open gitbash --
+cd roboshop-infra/50-backend-alb
+terraform init
+terraform plan
+terraform apply -auto-approve
+it takes 2 to 3 minutes to create LB
+
+after completion we can get backend LB , listener , default-rule in listener & r53 record for backend alb
+
+now goto bastion host
+curl http://catalogue.backend-alb-dev.sowjanya.fun
+<h1>Hi, I am from HTTP Backend ALB</h1>
+
+ 
+
+
+
+
+
+
+

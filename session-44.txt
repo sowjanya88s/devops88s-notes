@@ -1,0 +1,252 @@
+steps:
+=====
+1.launch instance
+2.configure the instance
+3.stop the instance
+4.take ami
+5.create launch template
+6.create auto scaling group (depends on launch template , after creating auto scaling group it will launch the instance into target group) -- we will set a policy for auto scaling group (i.e if 7.cpu_utilization > 70 , then create instances)
+8.create target group (it has no dependancies)
+9.create listener rule in LB for component (listener rule depends on target group)
+10.terminate instance which is created at first
+
+lets see creation of auto scaling group by using terraform
+search -- aws auto scaling group terraform
+mention name for  auto scaling group 
+mention max size & min_size & grace period for health check & desired capacity 
+force_delete is false means it waits until the instances in auto scaling group are terminated
+launch_configuration (old) & launch_template are same , use only one
+use  launch_template mention id & version in it
+mention private subnet id here
+mention target_group_arn by this auto scaling group places instances in target group
+mention tag  
+
+when application comes from v3 to v4 we need to refresh auto scaling group
+when we refresh auto scaling group -- it will creates new launch template & it means new application version came 
+now we have to refresh instances means we have to create servers with new application version & simultaneously we have to delete servers with old application version
+for this write instance_refresh block in auto scaling group
+mention that instance_refresh depends on launch template (by this when launch template is updated new instances will be created)
+mention timeout as 15 mins -- means within 15 min auto scaling should be completed otherwise it fails because of timeout & deletes that auto scaling group
+
+we have to give tags separately in auto scaling group
+in auto scaling tags -- we have to write tags -- in that we have to mention key & value & propogate_at_launch separately
+lets write dynamic block for tags
+in dynamic block we have a special variable for_each & while refering key use dynamic_key 
+next we have to write auto scaling policy
+mention auto scaling group & name for auto scaling policy
+use target tracking configuration here & mention metric type as ASGAverageCPUUtilization & mention cpu utilization metric there
+(means when to create new instances)
+
+next we have to write listener rule
+search -- aws lb listener rule
+in this we have to mention alb listener rule -- in this we have to mention where we want to create rules
+get this from load balancer listener rule -- upload that arn into ssm parameter store & get it here by using data source
+in lb listener rule mention forward action & condition block 
+
+now we have to delete the instance
+generally we have to use terraform destroy -- by this command all resources will be deleted
+there are no command in terraform to delete instances 
+so use provisioner local-exec because we r running this playbook from bastion host by running there we have to mention local-exec , by this use aws cli command to destroy instance using instance id
+write depends_on as auto scaling policy (this is the last resource in the entire process) & listener rule depends on target group
+
+while updating the code in git repo if u get the error -- the following untracked working tree files would be overwritten by merge terraform.lock.hcl
+then use rm  terraform.lock.hcl or remove this in  terraform.lock.hcl in vs code
+& terraform init -reconfigure 
+the file terraform.lock.hcl creates lock file with terraform version 
+in future if anyone gives 6.4  -- then terraform throws error like u have created this with 6.33 by changing version as 6.4 compatibility issues comes -- then they will update terraform version as 6.4 -- we will discuss this at the end of terraform
+while using terraform plan command it it throws warning like launch_template always triggers an instance refresh and can be removed (we want this)
+terraform configure -- reads provider version code and downloads that version & connects to backend s3 if mentioned & creates lock file with version 6.33 -- to indicate that current code is developed using 6.33 version
+we have to push  terraform.lock.hcl -- where ever u run the code u should run terraform init command , by this users of the code understands this code is developed using 6.33 version
+
+from bastion host run below commands related to health
+http://catalogue.backend-alb-dev.sowjanya.fun/health
+request flow -- r53 -- if someone hits , *.backend-alb-dev.sowjanya.fun -- forward this request to backend-alb
+in alb -- this hits http listener -- rule -- 2 rules will be there -- matches with catalogue.backend-alb-dev.sowjanya.fun -- request goes to catalogue target group (form port 80 to 8080) -- before sending alb sends to only healthy instances
+
+now connect to catalogue instance and apply some stress on it to increase cpu utilization
+search -- stress cpu utilization 
+u will find some commands --
+sudo yum install stress-ng -y
+stress-ng --cpu 2 --cpu-load 80
+this will apply stress on cpu utilization -- by that it assumes cpu util increases
+now goto ec2 dashboard -- select catalogue instance -- monitoring -- cpu utilization -- there u can see cpu utilization increases to 80% slowly
+now check auto scaling creates instance -- takes time upto 2 mins -- instance comes to running state
+to get the instance fastly -- by default it takes 300 sec for instance warmup -- decrease it to 120 seconds
+search -- aws auto scaling policy terraform
+use estimated_instance_warmup variable for this from attribute reference
+press ctrl+c -- takes 5 to 10 mins to delete additional instances created because of stress
+
+open roboshop-infra repo -- 
+main.tf
+=======
+resource "aws_autoscaling_group" "catalogue" {
+  name                      = "${var.project}-${var.environment}-catalogue"
+  max_size                  = 10
+  min_size                  = 1
+  health_check_grace_period = 120
+  health_check_type         = "ELB"
+  desired_capacity          = 1
+  force_delete              = false
+
+  launch_template {
+    id      = aws_launch_template.catalogue.id
+    version = "$Latest"
+  }
+
+  
+  vpc_zone_identifier       = [local.private_subnet_id]
+  target_group_arns = [aws_lb_target_group.catalogue.arn]
+
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+    }
+    triggers = ["launch_template"]
+  }
+
+  dynamic "tag" {
+    for_each = merge(
+        {
+            Name = "${var.project}-${var.environment}-catalogue"
+        },
+        local.common_tags
+    )
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
+  }
+
+  # with in 15min autoscaling should be successful
+  timeouts {
+    delete = "15m"
+  }
+}
+
+resource "aws_autoscaling_policy" "catalogue" {
+  autoscaling_group_name = aws_autoscaling_group.catalogue.name
+  name                   = "${var.project}-${var.environment}-catalogue"
+  policy_type            = "TargetTrackingScaling"
+  estimated_instance_warmup = 120
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
+
+    target_value = 70.0
+  }
+}
+
+# This depends on target group
+resource "aws_lb_listener_rule" "catalogue" {
+  listener_arn = local.backend_alb_listener_arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.catalogue.arn
+  }
+
+  condition {
+    host_header {
+      values = ["catalogue.backend-alb-${var.environment}.${var.domain_name}"]
+    }
+  }
+}
+
+resource "terraform_data" "catalogue_delete" {
+  triggers_replace = [
+    aws_instance.catalogue.id
+  ]
+  depends_on = [aws_autoscaling_policy.catalogue]
+  
+  # it executes in bastion
+  provisioner "local-exec" {
+    command = "aws ec2 terminate-instances --instance-ids ${aws_instance.catalogue.id} "
+  }
+}
+
+bootstrap.sh
+============
+#!/bin/bash
+
+component=$1
+environment=$2
+app_version=$3
+dnf install ansible -y
+
+cd /home/ec2-user
+git clone https://github.com/daws-88s/ansible-roboshop-roles-tf.git
+
+cd ansible-roboshop-roles-tf
+git pull
+ansible-playbook -e component=$component -e env=$environment -e app_version=$app_version roboshop.yaml
+
+data.tf
+=======
+data "aws_ssm_parameter" "backend_alb_listener_arn" {
+    name = "/${var.project}/${var.environment}/backend_alb_listener_arn"
+}
+
+locals.tf
+==========
+locals {
+backend_alb_listener_arn = data.aws_ssm_parameter.backend_alb_listener_arn.value
+}
+
+variables.tf
+============
+variable "app_version" {
+    default = "v3"
+}
+
+open gitbash
+cd roboshop-infra
+cd 60-catalogue
+terraform init
+terraform apply -auto-approve
+
+we don't use terraform apply command regularly , we use this command when new version comes in catalogue application
+
+when u give terraform apply command again -- a new instance will be created for catalogue & it will be configured & instance will be stopped & takes ami of that & new launch template creates & instances will be refreshed in auto scaling group (old instances will be deleted & new instances comes using new ami in that place)
+
+we will use terraform apply when there is a new production release
+mention app_version in vars of catalogue or ansible-roboshop-roles-tf -- group_vars -- all.yaml
+by this we can override this version when we want want
+while configuring instance with bootstrap.sh mention app_version also & create variable app_version & mention that in bootstrap file also
+
+if we don't change the version also -- it applies again because terraform does not knows about versions -- it compares current infra with state file
+
+if issues comes in new version, u can rollback to ur old version by simply changing the version at one place (in variables)
+
+we have to use the same procedure for all components , so use this code for creation of module and parametarize this
+
+
+create one repo -- terraform-roboshop-component
+
+instead of catalogue use variable component, use the same module for front end also
+create component variable
+
+in our roboshop architecture -- create frontend alb in public subnet , we can place frontend in private subnet
+the only difference between frontend and backend is post number and health checks 
+
+in terraform resources names mention name as main & refer it as main (in resource names variables won't work)
+use port_number variable & use health check path variable
+parametarize the sg_id 
+change the name of ami as roboshop-dev-catalogue-v3-i-instance-id
+create priority variable useful for mentioning priority of rules
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,409 @@
+in offices we use vpn
+bastion accepts connection from vpn only
+cisco vpn team will be there in offices -- they will take care of vpn service
+launch instance for open vpn
+use community ami -- name -- OpenVPN access server community image-8(starts with 8) -- use this image
+instance type -- t3.small (min requirement)
+select key pair --
+select roboshop vpc -- public subnet -- 
+create one security group -- with name roboshop-dev-OpenVPN --allow 443 port (to accept connection from outside) , 
+allow 943 (vpn port)
+allow 22 (from internet -- 0.0.0.0/0)
+launch the instance
+
+connect to instance using gitbash -- ssh -i <key-name> openvpnas@<public-ip>
+
+please enter yes to indicate ur agreement : yes
+press enter for default:
+will this be the primary access server node?
+press enter for default [yes]:
+please specify the network interface and ip address to be used by the admin web UI:
+press enter for default [1]:
+please specify the the port number for the admin web UI
+press enter for default [943]:
+please specify the the port number for the OpenVPN Daemon
+press enter for default [443]:
+should client traffic be routed by default through the vpn?
+press enter for default [no]:yes
+should client DNS traffic be routed by default through the vpn?
+press enter for default [no]:yes
+should private subnets be accessible to clients by default?
+press enter for ec2 default [yes]:
+do u wish to login to the admin UI as OpenVPN?
+press enter for default [yes]:
+type a password for the OpenVPN account : <give passwd>
+confirm password:
+activation key : enter
+after completion of settings , it will give u admin UI url  & client UI url 
+-- copy admin Ui url it
+the url comes with self signed certificate
+give username -- OpenVPN
+password: <pwd given earlier>
+u can see OpenVPN dashboard
+u can see settings here
+in advanced settings -- u can change anything here if u want
+vpn server setup is completed , to connect to server we need open vpn client
+
+search -- OpenVPN client
+download for windows (.msi)
+after downloading -- install OpenVPN
+after installation u will get openvpn connect software
+URL -- <paste client UI url>
+username -- OpenVPN
+password -- <give password>
+profile name: OpenVPN@<public-ip>
+port: 443 -- import
+
+connect to the vpn (enable it) -- give username & pwd
+check before & after connecting to vpn
+
+now open bastion sg -- allows ssh from OpenVPN sg 
+every request from our laptop goes through the vpn server -- connection will be allowed
+vpn is like forward proxy -- used for content filtering , content access
+
+from vpn we allow backend alb & frontend alb -- by this developers can perform health checks & they will check components are working properly or not
+
+open browser -- http://something.backend-alb-dev.sowjanya.fun
+we cannot see the output because backend-alb only accepts connection only from frontend-alb
+we should write rules for backend-alb should accepts connection  from OpenVPN
+open backend_alb sg -- inbound rules -- custom tcp -- 80 -- sg of open vpn -- modify
+open browser -- http://something.backend-alb-dev.sowjanya.fun
+u can see the backed-alb default output -- 
+
+if u add OpenVPN in catalogue sg -- inbound rules -- 8080 -- sg of OpenVPN -- modify
+now developers can access catalogue page from OpenVPN
+open browser -- http://catalogue.backend-alb-dev.sowjanya.fun/health
+u can see health status of catalogue
+
+delete this manual config 
+
+lets automate the OpenVPN process 
+firstly we have to create sg for OpenVPN
+roboshop-infra -- 10-sg 
+
+variables.tf
+=============
+in variable sg_names -- add OpenVPN name in default value
+
+by this open_vpn_sg will be created
+
+now open 20-sg-rules -- add rules for OpenVPN
+get OpenVPN sg id & refer it using locals
+allow backend_alb to accept connections from openvpn
+20-sg-rules -- main.tf
+======================
+# Open VPN
+resource "aws_security_group_rule" "openvpn_public_443" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  # Where traffic is coming from
+  cidr_blocks = ["0.0.0.0/0"]
+  security_group_id = local.openvpn_sg_id
+}
+
+# Admin UI
+resource "aws_security_group_rule" "openvpn_public_943" {
+  type              = "ingress"
+  from_port         = 943
+  to_port           = 943
+  protocol          = "tcp"
+  # Where traffic is coming from
+  cidr_blocks = ["0.0.0.0/0"]
+  security_group_id = local.openvpn_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_openvpn" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.openvpn_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+create new repo in roboshop-infra -- 98-openvpn 
+use data source to get open vpn access server community image
+ami's -- public images -- check ami id & details of it
+refer the data source from locals
+create one instance using code
+get public subnet id using data source & refer it from locals
+get open vpn sg id using data source & refer it from locals
+write one script to configure open vpn instance
+u can get this script from google
+
+
+provider.tf
+===========
+copy provider
+
+main.tf
+========
+resource "aws_instance" "openvpn" {
+  ami           = local.ami_id
+  instance_type = "t3.small"
+  subnet_id = local.public_subnet_id
+  vpc_security_group_ids = [local.openvpn_sg_id]
+  user_data = file("vpn.sh")
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-openvpn"
+    },
+    local.common_tags
+  )
+}
+
+data.tf
+========
+data "aws_ami" "openvpn" {
+  most_recent      = true
+  owners           = ["679593333241"]
+
+  filter {
+    name   = "name"
+    values = ["OpenVPN Access Server Community Image-8fbe3379-*"]
+  }
+
+  filter {
+    name   = "root-device-type"
+    values = ["ebs"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+data "aws_ssm_parameter" "public_subnet_ids" {
+    name = "/${var.project}/${var.environment}/public_subnet_ids"
+}
+
+data "aws_ssm_parameter" "openvpn_sg_id" {
+    name = "/${var.project}/${var.environment}/openvpn_sg_id"
+}
+
+locals.tf
+=========
+locals {
+    ami_id =  data.aws_ami.openvpn.id
+    common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+    # public subnet in 1a AZ
+    public_subnet_id = split(",", data.aws_ssm_parameter.public_subnet_ids.value)[0]
+    openvpn_sg_id = data.aws_ssm_parameter.openvpn_sg_id.value
+}
+
+variables.tf
+=============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+OpenVPN.sh
+==========
+#!/bin/bash
+set -euo pipefail
+
+SCRIPTS="/usr/local/openvpn_as/scripts"
+USERNAME="openvpn"
+PASSWORD='Openvpn@123'   # Use SSM or Secrets Manager in production
+
+# Wait until Access Server UI is ready
+until curl -ks https://127.0.0.1:943/ >/dev/null 2>&1; do sleep 3; done
+
+# 1. Accept the license agreement
+$SCRIPTS/sacli --key 'eula_accepted' --value 'true' ConfigPut
+
+# 2. Set admin user and password
+$SCRIPTS/sacli --user "$USERNAME" --new_pass "$PASSWORD" SetLocalPassword
+$SCRIPTS/sacli --user "$USERNAME" --key 'prop_superuser' --value 'true' UserPropPut
+
+# 3. VPN port and protocol
+$SCRIPTS/sacli --key 'vpn.server.port'     --value '1194' ConfigPut
+$SCRIPTS/sacli --key 'vpn.server.protocol' --value 'udp'  ConfigPut
+
+# 4. DNS configuration: use Access Server host DNS
+$SCRIPTS/sacli --key 'vpn.client.dns.server_auto' --value 'true' ConfigPut
+$SCRIPTS/sacli --key 'cs.prof.defaults.dns.0' --value '8.8.8.8' ConfigPut
+$SCRIPTS/sacli --key 'cs.prof.defaults.dns.1' --value '1.1.1.1' ConfigPut
+
+# 5. Route all client traffic through the VPN
+$SCRIPTS/sacli --key 'vpn.client.routing.reroute_gw' --value 'true' ConfigPut
+
+# 6. Block access to VPN server services from clients (your latest request)
+$SCRIPTS/sacli --key 'vpn.server.routing.gateway_access' --value 'true' ConfigPut
+
+systemctl restart openvpnas
+
+# 7. Save and start
+$SCRIPTS/sacli ConfigSync
+$SCRIPTS/sacli start
+
+open gitbash -- 
+cd 98-openvpn
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+after completion connect to vpn and check connection with backend urls once again
+
+before terraform , infra is created manually using terraform, suddenly terraform became popular , then they need to import existing infra into terraform code
+
+upto now we have written code for resource definition -- to create infra
+
+reverse engineering
+====================
+we need to write code for existing terraform infra -- is called reverse engineering -- use terraform import option 
+
+create on ec2 instance 
+take one resource which is created manually --
+create on repo in terraform -- import -- copy provider.tf into it
+now lets try writing terraform code for existing ec2 instance
+search google -- take skeleton ec2 instance code
+to import any resource -- we should take its unique id
+for instance -- instance id is the unique id
+search google -- aws ec2 instance 
+at end , there will be an import command
+so run import command to see the details
+i.e terraform import aws_instance.example <instance-id>
+
+import -- main.tf
+=================
+resource "aws_instance" "import" {
+
+}
+
+open gitbash -- cd terraform/import
+terraform init
+terraform import aws_instance.example <instance-id>
+output
+======
+import prepared & successful
+by this we can get state file (this will be in json) & from that copy the data which we need to import the ec2 instance
+generally for an instance we need instance type , sg id , instance name , vpc id, subnet id, ami id , 
+in json syntax -- remove double quotes & colons instead write =
+after getting data run --
+
+terraform plan
+it shows if anything is missing
+if it shows infra matches with config means u have successfully imported that instance -- nobody knows whether it is created using terraform or not
+
+from now , if u want to change something like name of instance we can do it by using terraform code only
+it just follows the terraform life cycle only
+
+now change the name in code -- 
+terraform plan
+u can see 1 to change
+terraform apply -auto-approve
+now the name of instance will be changed
+
+steps for reverse engineering
+=============================
+1. terraform import is the option
+2. create skelton syntax for all the resources and provider file
+3. run import command to get the details from terraform state
+4. we get full details, we can pick and place them into resource definition
+
+to import all resources depending on each other or importing resources in entire project is practically impossible
+
+ultimate goal is -- without disturbing the end user we can do anything
+
+end user reference -- website url -- this url should always work
+everything in backend -- are internal references i.e database , private & public subnets
+
+understand request flow
+r53  -- frontend ALB -- frontend -- backend alb -- components -- db
+so we have to create infra parallely
+we have to import key components -- they are databases , vpc 
+because databases contains data
+remaining components which are in public subnets & private subnets -- we will be create them parallely using code
+
+stateless & stateful
+=====================
+state -- nothing but data
+if catalogue server crashes -- no data loss -- because there is no data
+catalogue fetches data from mongodb 
+we save catalogue code in GitHub -- create one instance & clone the repo & run terraform apply then we will get the catalogue ready
+if mongodb crashes -- we can create instance and we can install mongodb -- but we cannot get the db data
+so databases are stateful
+
+stateful -> state(data) is important. databases are stateful applications
+stateless -> backend and frontend applications created using programming languages are called stateless applications, we can easily even they crash
+
+after creation of total infra  -- we will test the flow
+dummy R53 -> new frontend ALB -> new frontend -> new backend alb -> components -> db
+
+after completion of test , 
+R53 -> new frontend ALB
+by taking down time
+
+if issues came , after implementation -- 
+R53 -> original frontend ALB
+
+there will be vendors -- they import existing infra into terraform code
+
+in interviews , if they ask -- we have done POC -- in dev -- it became successful
+so they hired vendors to import existing project prod infra into terraform code because don't want to take the risk of losing business because of some mistakes
+
+open terraform repo -- ec2 repo in it -- it contains code related to create ec2 & sg
+if u run terraform apply -- it will create sg & ec2
+
+run  -- terraform apply -auto-approve
+if u want to destroy only one resource -- u can use target 
+terraform target -> you can target specific resource for creation or deletion
+terraform destroy -auto-approve -target=aws_instance.example
+which means we tell terraform to destroy ec2 instance
+warning: the -target option is not for routine use , and is provided only for exceptional situations such as recovering from errors or mistakes or when terraform specifically suggests to use it as part of an error message
+terraform target is not a safe command
+now run  -- terraform apply -auto-approve
+ec2 instance will be recreated
+now run -- terraform destroy -target=aws_security_group.allow_tls
+it shows 2 to destroy -- this means by this terraform destroys ec2 & sg -- which means target command deletes mentioned resources & its dependancies also
+whenever there is a need to use target -- observe carefully & use it
+or we can delete resources manually in console
+
+
+
+terraform taint 
+=============== 
+taint -> paint/pollute/corrupt
+consider we have to created infra using terraform -- sometime modified the infra in console 
+in this case destroy everything  & recreate the infra -- best & simple option
+if we have corrupted file -- in this situation we can use terraform taint option
+now run -- terraform taint aws_instance.example
+if u run -- terraform apply -auto-approve 
+this will deletes the instance & creates the instance again
+
+now if u try to change the name of sg -- changing the name of sg which used for aws reference is not possible
+the name mentioned in tags for human reference
+now change the name of sg 
+run -- terraform apply -auto-approve
+in this case it tries to destroy the sg & for creating new resource
+but sg is attached to ec2 --- is deletion of sg possible now? -- not possible
+now in this case -- lifecycle option is there in terraform -- 
+search -- lifecycle terraform
+
+lifecycle {
+create_before_destroy = true
+}
+
+by this terraform first create sg resource with updated name & modifies the instance & then deletes existing resource
+
+
+terraform usual behaviour is -- deletes existing resource & create new resource in that place
+
+
+to format terraform code perfectly -- use --
+terraform fmt
+

@@ -1,0 +1,653 @@
+we will discuss about frontend load balancer today
+this frontend is public LB 
+we have to run this on HTTPS
+we have to attach certificate here
+
+open GitHub of devops88s -- concepts repo -- TLS (Transport layer security)
+
+HTTP -- hyper text transfer protocol -- the data what we send goes as plain text
+data transfer through wires -- anybody can intercept those wires and they can get the data when we use http protocol
+this is reason why browser always complaints when we use http sites -- as unsecure & don't enter any payment related details here
+
+so nowadays everybody are moving towards https
+
+HTTP -- hyper text transfer protocol secure -- HTTP running inside an encrypted tunnel 
+
+SSL -- secure socket layer -- original encryption protocol version for that tunnel -- it is broken
+
+nowadays everybody are moving towards TLS -- Transport Layer Security -- modern replacement for SSL 
+
+here also public key & private key algorithm works 
+
+facts:
+======
+1. any message encrypted with Ramesh's public key can only be decrypted with Ramesh's private key.
+2. Anyone with access to Ramesh's public key can verify that a message could only have been created by someone with access to Ramesh's private key.
+3. A private key can always derive the public key. A public key can never derive the private key — mathematically impossible.
+
+while checking a message -- 
+public key is available everywhere
+what we have to check is -- a message is signed using private key or not
+
+persons involved in this overall process -- 
+Website owner
+==============
+	The company or developer who generates keys, obtains the certificate and deploys it on the server. the owner reponsibility is to make website secure
+
+End user
+========
+	The visitor — their browser silently validates the certificate before any data flows
+
+we can generate ssl certs by self signing them but browsers don't believe self signed certificates. browsers only belives the certificates from CA (certificate authority) vendor. we have to place the CA certificate in the server. when we ask CA to provide the certificate , before giving the certificate they will check whether we own the domain or not
+
+CA vendor
+=========
+	Verifies domain ownership and issues the signed certificate — e.g. Let's Encrypt, ZeroSSL, DigiCert
+
+Domain registrar
+================
+	Where the domain name is registered — used during domain ownership validation e.g. GoDaddy, Namecheap
+
+key objects
+
+Private key
+===========	A large random number — the root of everything. Used to sign the CSR and decrypt TLS sessions	-- never shared
+	
+Public key
+===========
+	Mathematically derived from the private key. Embedded inside the certificate	--  Safe to share
+
+when we approach CA -- we need to send this request i.e CSR -- it contains public key & company info and signature with us 
+	
+CSR
+====
+	Certificate Signing Request — contains your public key + identity  info + signature. Sent to the CA --  Sent to CA
+
+Certificate (.crt)
+==================	
+Issued by the CA after domain validation. Contains the public key, domain, validity dates and CA's signature
+
+open any website -- connection is secure -- certificate is valid -- here we can see who provided this certificate -- in issued by column -- 
+
+certificate chain
+
+Root certificate --	Manufacturer --	Pre-installed in your OS and browser — the ultimate trust anchor
+	
+Intermediate certificate --	Regional distributor --	Signed by the root CA — bridges the root to your certificate
+	
+Leaf certificate -- 	Local seller --	Your certificate — signed by the intermediate, presented to the browser
+	
+Browser (end user) --	Customer --	Walks the chain upward — root found in trust store → shows padlock
+
+ CA (certificate Authority) -- only few CA browsers and OS trust
+CA gave permission to some intermediate certificate authorities to issue certificates on behalf of them -- its like reseller of root CA
+
+there can be multiple intermediate certificate authorities
+
+root CA -> intermediate CA -> certificate
+
+browsers will be installed with root certificates bydefault
+
+Infrastructure
+
+Component	Description
+🖥️	Web server -- 	Holds the private key and certificate — presents them during the TLS handshake e.g. Nginx, Apache, Caddy
+🔐	OS trust store -- Built-in list of ~150 trusted root CA certificates in every OS and browser — the foundation of public trust
+📡	DNS	Domain name system —- used during certificate issuance to prove domain ownership via TXT records or HTTP files
+🌍	Browser	Validates the full certificate chain against the OS trust store —- shows the padlock when all checks pass
+
+let see about Self-Signed Certificates
+
+we will create public key and private key for our website. we generate CSR 
+
+CSR -- contains public key signed by our private key + company info + validity + domain information
+
+lets generate public key & private key
+
+openssl will be installed bydefault on all servers
+
+create on server -- and install nginx in it
+in server's user data mention below commands --
+#!/bin/bash
+yum install nginx -y
+systemctl start nginx
+
+now we have to make nginx test page run with https
+connect to nginx server
+command to generate private key --
+openssl genrsa -out private.pem 4096
+
+we can generate public key by using private key
+
+command to generate public key by using private key --
+openssl pkey -in private.pem -pubout -out public.pem
+
+now we have to generate CSR --
+openssl req -new -key private.pem -out csr.pem
+
+while creation it asks for  country name , state , locality , company name , company unit nam , common name(dns name) , email address , give password if u want , after giving all this information it will generate CSR
+
+command to create scr by using san.csf
+openssl req -new -key private.pem -config san.cnf -out csr.pem
+
+CSR  -- certificate signing request -- contains -- public key signed by our private key + company info + validity + domain information
+
+or we can also give info required for CSR generation in a file --
+search -- openssl csr with san config 
+copy san.cnf into server & open that file & make changes into it according to u
+
+san.cnf
+=======
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions    = v3_req
+prompt             = no
+
+[req_distinguished_name]
+C  = AE
+ST = Dubai
+L  = Dubai
+O  = joindevops
+CN = daws88s.online
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = daws88s.online
+DNS.2 = www.daws88s.online
+DNS.3 = api.daws88s.online
+DNS.4 = app.daws88s.online
+
+
+after that use below command to generate CSR --
+openssl req -new -key  private.pem -config san.cnf -out csr.pem
+
+command to generate self-signed certificate (means we r signing the cert using our own private key) --
+openssl x509 -req -in csr.pem \
+  -signkey private.pem \
+  -out cert.crt \
+  -days 365 -sha256 \
+  -extfile san.cnf -extensions v3_req
+
+this self-signed certificate is valid for 365 days
+
+after completion cert will be generated using name cert.crt
+
+this cert is public signed by private key
+
+lets discuss about TLS process  
+when u enter google.com in browser -- browser version (TLS version , ciphersuites) goes to google.com
+google.com sends server public certificate and this certificate contains domain info & issued by , validity & sha-256 fingerprints
+now the browser checks the domain name in certificate & the domain name entered by user is matched or not -- if both does not match it shows insecure 
+if matches -- 
+
+session establishment process 
+=============================
+1.client hello
+2.server ack and sends the certificate
+3.browser validates common name inside certificate and client entered website are same 
+certificate = public key + details
+4.if same it generates a random key and encrypts with public key
+5.server decrypts that random key with private key and sends the answer to the browser
+6.if the answer matches, then browser confirms it is connecting to proper server
+7.form now onwards , every data between browser and server will be encrypted with random key
+
+in this process session will be established & communication will become https
+
+nginx -> website
+we will tell nginx server , about the location of public key + certificate
+
+first request hits nginx only , to host react js applications we use nginx only
+
+copy files to nginx ssl directory
+
+sudo mkdir -p /etc/nginx/ssl
+sudo cp cert.crt    /etc/nginx/ssl/daws88s.online.crt
+sudo cp private.pem /etc/nginx/ssl/daws88s.online.key
+
+changing permissions
+sudo chmod 600 /etc/nginx/ssl/daws88s.online.key
+sudo chmod 644 /etc/nginx/ssl/daws88s.online.crt 
+
+edit nginx conf
+vim /etc/nginx/nginx.conf
+write 443 conf here
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+include /usr/share/nginx/modules/*.conf;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log  /var/log/nginx/access.log  main;
+    sendfile            on;
+    tcp_nopush          on;
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+    types_hash_max_size 4096;
+    include             /etc/nginx/mime.types;
+    default_type        application/octet-stream;
+    include /etc/nginx/conf.d/*.conf;
+
+    # Redirect HTTP → HTTPS
+    server {
+        listen       80;
+        listen       [::]:80;
+        server_name  daws88s.online *.daws88s.online;
+        return 301   https://$host$request_uri;
+    }
+
+    # HTTPS server
+    server {
+        listen       443 ssl http2;
+        listen       [::]:443 ssl http2;
+        server_name  daws88s.online *.daws88s.online;
+        root         /usr/share/nginx/html;
+
+        ssl_certificate        /etc/nginx/ssl/daws88s.online.crt;
+        ssl_certificate_key    /etc/nginx/ssl/daws88s.online.key;
+        ssl_session_cache      shared:SSL:1m;
+        ssl_session_timeout    10m;
+        ssl_protocols          TLSv1.2 TLSv1.3;
+        ssl_ciphers            HIGH:!aNULL:!MD5;
+        ssl_prefer_server_ciphers on;
+
+        include /etc/nginx/default.d/*.conf;
+
+        error_page 404 /404.html;
+        location = /404.html {}
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {}
+    }
+}
+
+check the syntax
+nginx -t
+systemctl reload nginx
+goto r53 -- create A record -- give public ip of server there
+check the website output before reload -- http://<public-ip>
+nginx test page comes
+check after reload -- https://sowjanya.fun
+u can see page is insecure but u can see the certificate here
+because the certificate is self signed so it is not valid in browser
+we can use this type of certs in dev environment , only for testing purpose.
+nginx is doing ssl termination -- who is checking the messages from browser , they will be called as ssl terminator
+where validation happens there only ssl will be terminated
+
+in our roboshop architecture -- frontend-alb is the ssl terminator -- after crossing frontend-alb , inside the architecture communication happens in http (insecure only)
+
+if our website -- shows as insecure nobody will do payments in our website
+
+self signed certs are not working , so we need to approach some vendors
+
+in world , there are very limited no.of root CA's
+Commonly trusted root CAs found in most browser and OS root stores include: 
+DigiCert: Often used for high-assurance certificates.
+GlobalSign: Widely used for organization validation.
+Sectigo (formerly Comodo): A major provider of various SSL options.
+IdenTrust: Operates the most widely used root, particularly with Let's Encrypt for cross-signing.
+Entrust: Known for enterprise-level certificates.
+Amazon: Increasingly common with AWS services. 
+DigiCert
+
+only these few CA's will be believed by browsers
+the public certificates related to root CA will be already installed in browsers
+to start Root CA -- it takes years to get the approval
+there will be one forum related to this root CA -- we need to approach them to get CA
+
+we need to pay money to get the certificate from CA
+
+we can consider zero ssl as intermediate CA -- there will be one root CA above them
+there will be some free certificates -- zero ssl -- gives valid certs which are valid for 90 days
+open zerossl in ur browser -- create an account here & login
+click on new certificate -- enter domain -- sowjanya.fun -- next
+(for wild card certs we need to pay money)
+(give only one domain)
+validity -- 90 days -- next
+add-ons -- zero ssl protect
+CSR & contact -- paste existing CSR -- paste csr.pem here -- next
+if u select auto-generate CSR -- it asks our email address & organization & department & city & state & country -- click on next
+encryption algorithm -- RSA 2048 -- next 
+finalize ur order -- next step --
+we should prove our domain ownership by using email verification or CNAME (in this we have to goto our domain -- create cname record -- with the given name & value)
+verify domain -- email verification -- give ur mail here 
+or
+DNS(CNAME) -- it will give us a key & value -- validate & verify domain
+click on download certificate -- server type -- default format -- download
+
+
+open r53 -- create record -- record type -- CNAME
+in record name -- write key 
+in value -- write value
+keep TTL as 1 & create record
+
+per account u can create one certificate only in zero ssl
+
+after downloading we will get private key & certificate & certificate chain (ca_bundle)
+
+when u enter some domain name in browser -- (root CA -- intermediate CAS -- certificate ) total chain will be validated
+
+we need to copy these 3 into our server's /tmp folder
+
+use scp command for this
+scp ca_bundle.crt ec2-user@<public-ip>:/tmp
+scp certificate.crt ec2-user@<public-ip>:/tmp
+scp private.key ec2-user@<public-ip>:/tmp
+
+we need to bundle ca_bundle.crt & certificate.crt to send to browser
+use below command for that --
+cat ca_bundle.crt >> certificate.crt
+
+now place this in place of self signed certificate
+use below commands --
+sudo cp fullchain.crt /etc/nginx/ssl/certificate.crt
+sudo cp private.key   /etc/nginx/ssl/private.key
+
+add this inside the http block -- 
+server {
+    listen 443 ssl;
+    server_name sowjanya.fun;
+
+    ssl_certificate     /etc/nginx/ssl/certificate.crt;
+    ssl_certificate_key /etc/nginx/ssl/private.key;
+
+    location / {
+        root /usr/share/nginx/html;
+        index index.html;
+    }
+   }
+ }
+
+now test and reload nginx
+sudo nginx -t
+sudo systemctl reload nginx
+ 
+open browser -- https://<domain-name>
+
+modified zero ssl certificate installation process according to documentation
+
+we can see the connection is secure & certificate is valid
+in cert details -- we can see details & validity etc
+
+we need to do this for our roboshop project
+for that we need to approach CA -- we have to update  CNAME record in R53
+but we cannot update records in inside alb
+so we need to use acm(amazon certificate manager) here  
+in acm we can import the certificate what we have & we can use it
+open acm -- import certificate --
+copy ca_bundle & paste in certificate chain
+copy private key & import in certificate private key
+copy certificate & paste in certificate body
+click on import
+after import we will get certificate id & we have to attach this to ALB
+
+or we can create certificate here only
+AWS certificate manager -- certifiactes -- request certificate 
+
+certificate type -- request a public certificate
+request public certificate -- domain names -- sowjanya.fun , *.sowjanya.fun
+we can create this certificate for multiple domains , amazon will charge hourly pricing
+disable export
+dns validation -- request
+
+our domain is in amazon only
+
+domains -- create records in r53 -- shows records -- create records
+
+goto r53 -- record will come automatically
+
+in acm -- in certificate -- we can see amazon issued
+
+we will attach this certificate this to Load balancer
+
+instead of creating cert using zero ssl and importing it to amazon will be become long process , so just get the certificate from amazon ACM because amazon is also one of CA
+get code to create r53 record & aws acm certificate validation code from there
+it does not depends on anything
+
+lets see creation acm using terraform
+search -- acm terraform
+mention domain name & validation method as DNS
+mention tags 
+
+create one repo -- 70-acm --
+provider.tf
+===========
+copy provider here
+
+main.tf
+=======
+resource "aws_acm_certificate" "roboshop" {
+  domain_name       = "*.${var.domain_name}"
+  validation_method = "DNS"
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-${var.domain_name}"
+    },
+    local.common_tags
+  )
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "roboshop" {
+  for_each = {
+    for dvo in aws_acm_certificate.roboshop.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = var.zone_id
+}
+
+resource "aws_acm_certificate_validation" "roboshop" {
+  certificate_arn         = aws_acm_certificate.roboshop.arn
+  validation_record_fqdns = [for record in aws_route53_record.roboshop : record.fqdn]
+}
+
+locals.tf
+=========
+locals {
+  common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+}
+
+parameters.tf
+=============
+resource "aws_ssm_parameter" "frontend_alb_certificate_arn" {
+  name  = "/${var.project}/${var.environment}/frontend_alb_certificate_arn"
+  type  = "String"
+  value = aws_acm_certificate.roboshop.arn
+}
+
+variables.tf
+============
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+
+now create frontend-ALB & attach acm to that LB
+we have to create this LB in frontend
+give name to LB & make it as public
+create listener as https with port number 443
+now we have to select the certificate with public LB
+save certificate arn in ssm parameter store 
+get that arn by using data source & refer it from locals
+mention default action & fixed response
+store frontend alb listener arn in ssm parameter store
+frontend should accept request from internet
+create r53 record with name *.sowjanya.fun
+and create frontend LB
+create sg related to this sg-rules
+
+20-sg-rules -- main.tf
+======================
+# Frontend ALB
+resource "aws_security_group_rule" "frontend_alb_public" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  # Where traffic is coming from
+  cidr_blocks = ["0.0.0.0/0"]
+  security_group_id = local.frontend_alb_sg_id
+}
+
+ALB , SG , databases are immutable
+only components are mutable
+
+
+
+create on repo -- 80-frontend-alb
+
+data.tf
+=======
+data "aws_ssm_parameter" "frontend_alb_sg_id" {
+    name = "/${var.project}/${var.environment}/frontend_alb_sg_id"
+}
+
+data "aws_ssm_parameter" "public_subnet_ids" {
+    name = "/${var.project}/${var.environment}/public_subnet_ids"
+}
+
+data "aws_ssm_parameter" "frontend_alb_certificate_arn" {
+    name = "/${var.project}/${var.environment}/frontend_alb_certificate_arn"
+}
+
+locals.tf
+=========
+locals {
+  frontend_alb_sg_id = data.aws_ssm_parameter.frontend_alb_sg_id.value
+  public_subnet_ids = split(",", data.aws_ssm_parameter.public_subnet_ids.value)
+  frontend_alb_certificate_arn = data.aws_ssm_parameter.frontend_alb_certificate_arn.value
+  common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+}
+
+main.tf
+=======
+resource "aws_lb" "frontend_alb" {
+  name               = "${var.project}-${var.environment}-frontend" # roboshop-dev-frontend
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [local.frontend_alb_sg_id]
+  subnets            = local.public_subnet_ids
+
+  # keeping it as false, just to delete using terraform while practice
+  enable_deletion_protection = false
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-frontend"
+    },
+    local.common_tags
+  )
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.frontend_alb.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = local.frontend_alb_certificate_arn
+
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/html"
+      message_body = "<h1>Hi, I am from HTTPS Frontend ALB</h1>"
+      status_code  = "200"
+    }
+  }
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = var.zone_id
+  name    = "*.${var.domain_name}"
+  type    = "A"
+  
+  # load balancer details
+  alias {
+    name                   = aws_lb.frontend_alb.dns_name
+    zone_id                = aws_lb.frontend_alb.zone_id
+    evaluate_target_health = true
+  }
+  allow_overwrite = true
+}
+
+parameters.tf
+=============
+resource "aws_ssm_parameter" "frontend_alb_listener_arn" {
+  name  = "/${var.project}/${var.environment}/frontend_alb_listener_arn"
+  type  = "String"
+  value = aws_lb_listener.https.arn
+}
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+terraform init
+terraform apply -auto-approve
+
+open browser -- https://frontend-dev.sowjanya.fun
+
+connect to bastion host --
+curl https://frontend-dev.sowjanya.fun
+
+

@@ -1,0 +1,702 @@
+HTTP + TLS = HTTPS
+in companies we use self-signed certificates for sandbox environments & proof of concept environments only
+
+we will call backend 
+catalogue  infra as -- catalogue.backend-alb-dev.sowjanya.fun
+user  infra as -- user.backend-alb-dev.sowjanya.fun
+cart  infra as -- cart.backend-alb-dev.sowjanya.fun
+shipping  infra as -- shipping.backend-alb-dev.sowjanya.fun
+payment  infra as -- payment.backend-alb-dev.sowjanya.fun
+
+frontend  infra as -- frontend-dev.sowjanya.fun
+
+immutable infra -- not frequently changing -- ex -- vpc, sg, databases , frontend alb  & backend alb & acm
+mutable infra -- sg-rules , 
+
+lets fix the sg-rules 
+mongodb -- should have connection from bastion on port 22, catalogue , user on port 27017
+
+redis -- should have connection from bastion on port 22, cart, user on port number 6379
+
+MySQL -- should have connection from bastion on port 22,shipping on port 3306
+
+RabbitMQ -- should have connections from bastion on port 22, payment on port 5672
+
+catalogue -- should have connections from bastion on port 22, backend-alb on port 8080
+
+note: communication between components happens through backend-alb even if they have dependent on each other
+
+user -- should have connections from bastion on port 22, backend-alb on port 8080
+
+cart -- should have connections from bastion on port 22, backend-alb on port 8080
+
+shipping -- should have connections from bastion on port 22, backend-alb on port 8080
+
+payment -- should have connections from bastion on port 22, backend-alb on port 8080
+
+backend_alb -- should accept connection from all the components i.e catalogue , user , cart , shipping , payment on port 80 & should accept connection from frontend_alb on port number 80
+
+frontend_alb -- should accept connections from frontend on port number 80 & it should accept connections from internet on port 443
+
+frontend -- should accepet connections from bastion on port number 22 & its hould accept connections from frontend_alb on port number 80
+
+backend-alb is like mediator for all components
+
+with the help of auto scaling & based on load the instances related to components may increase or decrease so the communication between components happens with the help of backend-alb
+
+get all sg_id's using data source and refer them by using locals
+
+goto roboshop-infra -- 20-sg-rules 
+
+main.tf
+=======
+# Bastion
+resource "aws_security_group_rule" "bastion_internet" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  #cidr_blocks       = ["0.0.0.0/0"]
+  cidr_blocks       = [local.my_ip]
+  # which SG you are creating this rule
+  security_group_id = local.bastion_sg_id
+}
+
+# MongoDB
+resource "aws_security_group_rule" "mongodb_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.mongodb_sg_id
+}
+
+resource "aws_security_group_rule" "mongodb_catalogue" {
+  type              = "ingress"
+  from_port         = 27017
+  to_port           = 27017
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.catalogue_sg_id
+  security_group_id = local.mongodb_sg_id
+}
+
+resource "aws_security_group_rule" "mongodb_user" {
+  type              = "ingress"
+  from_port         = 27017
+  to_port           = 27017
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.user_sg_id
+  security_group_id = local.mongodb_sg_id
+}
+
+# Redis
+resource "aws_security_group_rule" "redis_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.redis_sg_id
+}
+
+resource "aws_security_group_rule" "redis_user" {
+  type              = "ingress"
+  from_port         = 6379
+  to_port           = 6379
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.user_sg_id
+  security_group_id = local.redis_sg_id
+}
+
+resource "aws_security_group_rule" "redis_cart" {
+  type              = "ingress"
+  from_port         = 6379
+  to_port           = 6379
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.cart_sg_id
+  security_group_id = local.redis_sg_id
+}
+
+# MySQL
+resource "aws_security_group_rule" "mysql_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.mysql_sg_id
+}
+
+resource "aws_security_group_rule" "mysql_shipping" {
+  type              = "ingress"
+  from_port         = 3306
+  to_port           = 3306
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.shipping_sg_id
+  security_group_id = local.mysql_sg_id
+}
+
+# RabbitMQ
+resource "aws_security_group_rule" "rabbitmq_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.rabbitmq_sg_id
+}
+
+resource "aws_security_group_rule" "rabbitmq_payment" {
+  type              = "ingress"
+  from_port         = 5672
+  to_port           = 5672
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.payment_sg_id
+  security_group_id = local.rabbitmq_sg_id
+}
+
+# Catalogue
+resource "aws_security_group_rule" "catalogue_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.catalogue_sg_id
+}
+
+resource "aws_security_group_rule" "catalogue_backend_alb" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.backend_alb_sg_id
+  security_group_id = local.catalogue_sg_id
+}
+
+# User
+resource "aws_security_group_rule" "user_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.user_sg_id
+}
+
+resource "aws_security_group_rule" "user_backend_alb" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.backend_alb_sg_id
+  security_group_id = local.user_sg_id
+}
+
+# Cart
+resource "aws_security_group_rule" "cart_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.cart_sg_id
+}
+
+resource "aws_security_group_rule" "cart_backend_alb" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.backend_alb_sg_id
+  security_group_id = local.cart_sg_id
+}
+
+# Shipping
+resource "aws_security_group_rule" "shipping_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.shipping_sg_id
+}
+
+resource "aws_security_group_rule" "shipping_backend_alb" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.backend_alb_sg_id
+  security_group_id = local.shipping_sg_id
+}
+
+# Payment
+resource "aws_security_group_rule" "payment_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.payment_sg_id
+}
+
+resource "aws_security_group_rule" "payment_backend_alb" {
+  type              = "ingress"
+  from_port         = 8080
+  to_port           = 8080
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.backend_alb_sg_id
+  security_group_id = local.payment_sg_id
+}
+
+# Backend ALB
+resource "aws_security_group_rule" "backend_alb_bastion" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_catalogue" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.catalogue_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_user" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.user_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_cart" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.cart_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_shipping" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.shipping_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_payment" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.payment_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+resource "aws_security_group_rule" "backend_alb_frontend" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.frontend_sg_id
+  security_group_id = local.backend_alb_sg_id
+}
+
+# Frontend
+resource "aws_security_group_rule" "frontend_bastion" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.bastion_sg_id
+  security_group_id = local.frontend_sg_id
+}
+
+resource "aws_security_group_rule" "frontend_frontend_alb" {
+  type              = "ingress"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  # Where traffic is coming from
+  source_security_group_id = local.frontend_alb_sg_id
+  security_group_id = local.frontend_sg_id
+}
+
+# Frontend ALB
+resource "aws_security_group_rule" "frontend_alb_public" {
+  type              = "ingress"
+  from_port         = 443
+  to_port           = 443
+  protocol          = "tcp"
+  # Where traffic is coming from
+  cidr_blocks = ["0.0.0.0/0"]
+  security_group_id = local.frontend_alb_sg_id
+}
+
+locals.tf
+=========
+locals {
+  my_ip = "${chomp(data.http.my_public_ip_v4.response_body)}/32"
+  bastion_sg_id = data.aws_ssm_parameter.bastion_sg_id.value
+  mongodb_sg_id = data.aws_ssm_parameter.mongodb_sg_id.value
+  mysql_sg_id = data.aws_ssm_parameter.mysql_sg_id.value
+  redis_sg_id = data.aws_ssm_parameter.redis_sg_id.value
+  rabbitmq_sg_id = data.aws_ssm_parameter.rabbitmq_sg_id.value
+  catalogue_sg_id = data.aws_ssm_parameter.catalogue_sg_id.value
+  user_sg_id = data.aws_ssm_parameter.user_sg_id.value
+  cart_sg_id = data.aws_ssm_parameter.cart_sg_id.value
+  shipping_sg_id = data.aws_ssm_parameter.shipping_sg_id.value
+  payment_sg_id = data.aws_ssm_parameter.payment_sg_id.value
+  backend_alb_sg_id = data.aws_ssm_parameter.backend_alb_sg_id.value
+  frontend_sg_id = data.aws_ssm_parameter.frontend_sg_id.value
+  frontend_alb_sg_id = data.aws_ssm_parameter.frontend_alb_sg_id.value
+  openvpn_sg_id = data.aws_ssm_parameter.openvpn_sg_id.value
+}
+
+data.tf
+=======
+data "http" "my_public_ip_v4" {
+  url = "https://ipv4.icanhazip.com"
+}
+
+output "my_ipv4_address" {
+  value = chomp(data.http.my_public_ip_v4.response_body)
+}
+
+data "aws_ssm_parameter" "bastion_sg_id" {
+    name = "/${var.project}/${var.environment}/bastion_sg_id"
+}
+
+data "aws_ssm_parameter" "mongodb_sg_id" {
+    name = "/${var.project}/${var.environment}/mongodb_sg_id"
+}
+
+data "aws_ssm_parameter" "redis_sg_id" {
+    name = "/${var.project}/${var.environment}/redis_sg_id"
+}
+
+data "aws_ssm_parameter" "mysql_sg_id" {
+    name = "/${var.project}/${var.environment}/mysql_sg_id"
+}
+
+data "aws_ssm_parameter" "rabbitmq_sg_id" {
+    name = "/${var.project}/${var.environment}/rabbitmq_sg_id"
+}
+
+data "aws_ssm_parameter" "catalogue_sg_id" {
+    name = "/${var.project}/${var.environment}/catalogue_sg_id"
+}
+
+data "aws_ssm_parameter" "user_sg_id" {
+    name = "/${var.project}/${var.environment}/user_sg_id"
+}
+
+data "aws_ssm_parameter" "cart_sg_id" {
+    name = "/${var.project}/${var.environment}/cart_sg_id"
+}
+
+data "aws_ssm_parameter" "shipping_sg_id" {
+    name = "/${var.project}/${var.environment}/shipping_sg_id"
+}
+
+data "aws_ssm_parameter" "payment_sg_id" {
+    name = "/${var.project}/${var.environment}/payment_sg_id"
+}
+
+data "aws_ssm_parameter" "backend_alb_sg_id" {
+    name = "/${var.project}/${var.environment}/backend_alb_sg_id"
+}
+
+data "aws_ssm_parameter" "frontend_sg_id" {
+    name = "/${var.project}/${var.environment}/frontend_sg_id"
+}
+
+data "aws_ssm_parameter" "frontend_alb_sg_id" {
+    name = "/${var.project}/${var.environment}/frontend_alb_sg_id"
+}
+
+data "aws_ssm_parameter" "openvpn_sg_id" {
+    name = "/${var.project}/${var.environment}/openvpn_sg_id"
+}
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+now open gitbash -- 
+cd roboshop-infra/20-sg-rules
+terraform init
+terraform apply -auto-approve
+
+create one module to create all components & frontend instance & u can use it for entire roboshop project
+
+in databases repo -- pass env & app_version & by that we can use them for future
+
+open terraform-roboshop-component module -- 
+in variable mention project & env name & app_version (declare default as v3)
+write data source to get ami_id  & get private subnet ids using data source
+while getting sg_id use component variable
+in tags block also use component variable
+
+while creating target group ,
+if component is frontend we have to use health check path as / , otherwise we have to use /health so write a condition for that
+
+while mentioning port number , if it is frontend we have to use port number as 80 otherwise use 8080 so write a condition for that
+
+in listener , we have to send rule priority
+create rule_priority variable 
+frontend should be attached to frontend_alb_listener
+backend  components should be attached to backend_alb_listener
+so get frontend_alb_listener_arn & backend_alb_listener_arn using data source & refer them by using locals
+mention alb_listener_arn & write a condition in that as if component is frontend refer frontend_alb_listener_arn , otherwise use backend_alb_listener_arn
+
+in lb_listener_rule -- host header also changes for frontend & backend
+in host header -- if component is frontend & header value should be frontend-dev.sowjanya.fun , otherwise header value should be component.backend-alb-dev.sowjanya.fun & refer them with locals
+
+
+now we have to pass component & rule priority 
+
+open roboshop-ansible-roles-tf -- group_vars -- all.yaml
+there are some changes here 
+we will refer catalogue as -- 
+catalogue.backend-alb-dev.sowjanya.fun
+
+user.backend-alb-dev.sowjanya.fun
+
+cart.backend-alb-dev.sowjanya.fun
+
+shipping.backend-alb-dev.sowjanya.fun
+
+payment.backend-alb-dev.sowjanya.fun
+
+modify the file accordingly
+
+roboshop-ansible-roles-tf -- group_vars -- all.yaml
+====================================================
+ansible_user: ec2-user
+ansible_password: DevOps321
+MONGODB_HOST: mongodb-{{ env }}.daws88s.online
+REDIS_HOST: redis-{{ env }}.daws88s.online
+MYSQL_HOST: mysql-{{ env }}.daws88s.online
+RABBITMQ_HOST: rabbitmq-{{ env }}.daws88s.online
+CATALOGUE_HOST: catalogue.backend-alb-{{ env }}.daws88s.online
+USER_HOST: user.backend-alb-{{ env }}.daws88s.online
+CART_HOST: cart.backend-alb-{{ env }}.daws88s.online
+SHIPPING_HOST: shipping.backend-alb-{{ env }}.daws88s.online
+PAYMENT_HOST: payment.backend-alb-{{ env }}.daws88s.online
+app_version: v3
+
+when cart calls catalogue through backend_alb , cart cannot call catalogue directly
+so change the port number as 80 in service files of cart , shipping , payment
+
+cart.service
+============
+[Unit]
+Description = Cart Service
+[Service]
+User=roboshop
+// highlight-start
+Environment=REDIS_HOST="{{ REDIS_HOST }}"
+Environment=CATALOGUE_HOST="{{ CATALOGUE_HOST }}"
+Environment=CATALOGUE_PORT=80
+// highlight-end
+ExecStart=/bin/node /app/server.js
+SyslogIdentifier=cart
+
+[Install]
+WantedBy=multi-user.target
+
+shipping.service
+=================
+[Unit]
+Description=Shipping Service
+
+[Service]
+User=roboshop
+// highlight-start
+Environment=CART_ENDPOINT="{{ CART_HOST }}:80"
+Environment=DB_HOST="{{ MYSQL_HOST }}"
+// highlight-end
+ExecStart=/bin/java -jar /app/shipping.jar
+SyslogIdentifier=shipping
+
+[Install]
+WantedBy=multi-user.target
+
+payment.service
+===============
+[Unit]
+Description=Payment Service
+
+[Service]
+User=root
+WorkingDirectory=/app
+// highlight-start
+Environment=CART_HOST="{{ CART_HOST }}"
+Environment=CART_PORT=80
+Environment=USER_HOST="{{ USER_HOST }}"
+Environment=USER_PORT=80
+Environment=AMQP_HOST="{{ RABBITMQ_HOST }}"
+// highlight-end
+Environment=AMQP_USER=roboshop
+Environment=AMQP_PASS=roboshop123
+
+ExecStart=/usr/local/bin/uwsgi --ini payment.ini
+ExecStop=/bin/kill -9 $MAINPID
+SyslogIdentifier=payment
+
+[Install]
+WantedBy=multi-user.target
+
+push these changes in git repo
+
+final check list
+================
+1.check sg rules
+2.ansible roles service files
+3.ansible roles host urls
+4.check nginx configuration 
+
+inrepo where u use module refer module's GitHub https url  we have to send component name & priority 
+now create one repo in roboshop-infra -- 90-components
+use for loop to define components (map data type) along with their priority values
+in components variable mention catalogue , cart , user , shipping , payment , frontend 
+run this from bastion host
+
+provider.tf
+===========
+copy provider
+
+main.tf
+========
+module "component" {
+    for_each = var.components
+    source = "git::https://github.com/daws-88s/terraform-roboshop-component.git?ref=main"
+    component = each.key
+    rule_priority = each.value.rule_priority
+}
+
+variables.tf
+============
+variable "components" {
+    default = {
+        # backend components are attaching to backend ALB
+        catalogue = {
+            rule_priority = 10
+        }
+        user = {
+            rule_priority = 20
+        }
+        cart = {
+            rule_priority = 30
+        }
+        shipping = {
+            rule_priority = 40
+        }
+        payment = {
+            rule_priority = 50
+        }
+        # this is attaching to frontend ALB, there is only component there
+        frontend = {
+            rule_priority = 10
+        }
+    }
+}
+
+bootstrap.sh
+============
+#!/bin/bash
+
+component=$1
+environment=$2
+app_version=$3
+dnf install ansible -y
+
+cd /home/ec2-user
+git clone https://github.com/daws-88s/ansible-roboshop-roles-tf.git
+
+cd ansible-roboshop-roles-tf
+git pull
+ansible-playbook -e component=$component -e env=$environment -e app_version=$app_version roboshop.yaml
+
+when there are any updates in module
+push that into git repo
+
+in repo where u refer module
+terraform get -update
+
+connect to bastion host 
+cd roboshop-infra/90-components
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+this will create catalogue , user , cart, shipping , payment , frontend instances
+
+frontend runs with nginx on port 443
+backend_alb , frontend_alb runs on 80 as alb(application load balancer)
+
+first create catalogue instance and try to connect
+https://frontend-dev.sowjanya.fun -- we r not able to see components
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

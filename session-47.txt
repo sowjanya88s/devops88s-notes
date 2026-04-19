@@ -1,0 +1,386 @@
+yesterday -- we have seen created catalogue instance but we are unable to see catalogue
+
+lets check nginx.conf
+the problem here is port number -- remove the port number 8080 and save the config file & now push the changes to git & apply changes
+
+now open url in browser -- http://frontend-dev.sowjanya.fun
+now we can see the catalogue
+
+now create all the components -- catalogue , user , cart, shipping, payment, frontend -- all these instances will be created in private subnet
+
+only bastion host will be created in public subnet
+
+CDN(cloudfront)
+===============
+amazon prime , Netflix are video streaming platforms
+generally Netflix servers are in US
+when u watch Netflix content from india -- content should continuously flow from us to india -- there will be some latency & unnecessary traffic/bandwidth
+
+we have discussed one topic in previous classes , application does not always hits DB always , application checks cache first , if cache is not available then it hits DB
+
+in video/content streaming platforms -- browser does not always connect to origin server ,  there is something called CDN(content delivery network)
+
+CDN -- it is a network of storage servers (also called as edge location) across the globe used to cache the content. there will be an origin server , 
+first application hits edge location , if data is not there the it gets data from origin & saves it in edge location so that subsequent requests get data from edge location
+
+AWS has 400 edge locations around the world
+search -- aws edge location in india 
+Mumbai , new delhi , Chennai , Kolkata, bangalore , Hyderabad , pune
+
+consider that a new movie came , when the 1st person try to watch the movie from hyd , browser checks the nearest the edge location(hyd) for the content , if the content is not available in edge location, then it gets the content from origin server and saves the data in edge location. then if anybody tries to watch the content from hyd the browser fetches the content from hyd edge location , by this process speed increases when anyone tries to access the content -- this is how cache works in CDN
+
+
+we can control the type of the content -- 
+there are 4 types of http requests
+GET POST UPDATE DELETE
+in 4 options -- GET is the safest operation
+GET (reading info) -- can be cached
+POST UPDATE DELETE -- generally shouldn't be cached
+blind rule -- info reading can be cached (for ex: product details -- images , description , faq , rating, reviews)
+images , description , faq -- not frequently changing -- we can cache this things for much time
+rating & reviews -- frequently changing -- we can cache this things for less amount of time 
+we can also control TTL(time to live)
+
+.js , .css , images -- can be cached 
+
+invalidation 
+============
+when u applied changes in ur application & u have deployed those changes -- we should delete the cache , otherwise old content will be displayed to the users
+
+when new deployment /release happens usually we should invalidate all the caching content , it deletes the data from all the edge servers. content will be downloaded again from origin to edge locations
+
+whenever there is a release -- invalidation is the better option
+
+the origin can be ec2 server or s3 bucket or Load balancer
+u should decide which requests should be cached & which requests should be invalidated
+
+now user directly hits CDN , we attach this CDN to route53 , CDn forward the requests to frontend LB (cloudfront takes frontend ALB as origin because content comes from frontend LB)
+
+after creation of all the components using module -- open browser
+httpd://frontend-dev.sowjanya.fun
+check all the components are working properly or not
+
+lets see creation of CDN in aws console
+goto aws console -- CloudFront -- distribution -- create distribution -- select pay as u go option 
+if u select free plan -- u can't delete the cloudfront distribution aftr the usage
+cloudfront is a global service so it creates the resources in n.virginia
+ 
+step 2 -- name -- roboshop-dev
+single website or app
+domain -- roboshop-dev.sowjanya.fun -- next
+
+step 3 -- origin type -- elastic load balancer 
+elastic LB origin -- frontend-dev.sowjanya.fun
+origin settings -- customize origin settings
+protocol -- https only 
+https port -- 443
+minimum origin ssl protocol -- TLSv1.2
+use default values of connection attempts , timeout , response timeout , keep-alive timeout
+origin ip address -- ipv4
+cache settings -- customize cache settings 
+viewer protocol policy -- https only
+allowed http method -- GET , HEAD , OPTIONS
+http methods , origin request policy , response headers policy  will be decided by developers
+cache policy -- caching optimized -- next
+
+step 4 -- do not enable security protections -- next
+
+step 5 -- get TLS certificate -- available certificates -- *.sowjanya.fun -- next
+ 
+we will give this url to public so select our certificate
+
+step 6 -- review and create -- create distribution
+
+it will takes upto 5 minutes to create distribution
+
+origins -- where we want to get data -- we can add multiple origins here
+behaviours -- every request will hit our origin frontend-dev.sowjanya.fun , in this we have allowed  GET , HEAD , OPTIONS -- http methods
+
+we can add multiple behaviours -- for example open browser -- open our website -- frontend-dev.sowjanya.fun -- click on the page -- network tab -- u can see requests -- 
+in those copy stan.png request url --
+https://frontend-dev.sowjanya.fun/media/stan.png -- 
+media , videos , audio is generally images 
+
+in those copy graph.png request url --
+https://frontend-dev.sowjanya.fun/media/graph.png 
+
+in our url -- if we get any request -- /media/* -- we can cache it
+we can decide behaviours based on the patterns in url
+
+lets create behaviours in CDN --
+select our distribution -- create behaviour -- 
+path pattern -- /media/*
+origin and origin groups -- select frontend-dev
+viewer protocol policy -- https only
+allowed http methods -- get , head , options
+cache key and origin requests -- cache policy and origin request policy 
+cache policy -- caching optimized -- create behaviour
+
+lets create one more behaviour in CDN --
+select our distribution -- create behaviour --
+path pattern -- /images/*
+origin and origin groups -- select frontend-dev
+viewer protocol policy -- https only
+allowed http methods -- get , head , options
+cache key and origin requests -- cache policy and origin request policy
+cache policy -- caching optimized -- create behaviour
+
+when the request does not contains /media , /images -- then the request goes to default behaviour
+
+lets create one more behaviour in CDN --
+select our distribution -- create behaviour --
+path pattern -- /videos/*
+origin and origin groups -- select frontend-dev
+viewer protocol policy -- https only
+allowed http methods -- get , head , options
+cache key and origin requests -- cache policy and origin request policy
+cache policy -- caching optimized -- create behaviour
+
+what ever the content u want to cache -- mention that in behaviours
+we can also mention css files & js files -- we will decide cache policy name by discussing with developers
+
+after creating all these behaviours -- select default behaviour -- edit -- cache policy -- caching disabled 
+allowed http methods -- get , head , options, put, post, patch, delete
+ -- modify
+
+when nothing matches its meaning is that we are not caching that content
+
+error pages -- html code related page for errors will be created
+
+invalidations -- when we have deployed new changes into some paths in application -- add those paths here -- 
+
+invalidation -- create invalidation -- object paths -- mention paths here -- create invalidation
+
+if u have done multiple changes in the application -- its better to invalidate everything 
+in this case -- invalidation -- create invalidation -- object paths -- /* -- create invalidation
+
+after completion of deployment of CDN -- take that distribution name 
+open browser -- give distribution name -- u can see the website content here
+
+for CDN distribution -- create r53 record 
+r53 -- hosted zones -- create record -- 
+record name -- roboshop-dev
+record type -- A
+check alias
+route traffic to -- alias to cloudfront distribution
+select ur distribution -- create records
+
+now open browser -- https://roboshop-dev.sowjanya.fun -- we can see our website -- this comes from CDN -- all requests comes from CDN
+click on page -- network -- click on any request -- in via -- u can see cloudfront
+now check all the components in application are working properly or not
+
+upto now architecture is completed
+
+lets see creation of CDN using terraform 
+open vsc -- goto roboshop-infra repo -- create new repo -- 95-cloudfront
+if u give repo name as -- 100-cloudfront
+while applying terraform -- it consider sequence as -- 00 , 10 , 100 like that  
+u can check the order by using -- ls -d * -- in gitbash 
+
+search -- aws cloudfront distribution terraform
+we can restrict our content visibility across the world by using geo_restriction block 
+mention origin domain name , origin id as frontend-dev.sowjanya.fun
+we r using alb as origin 
+search -- aws cdn alb origin example terraform
+get custom origin config block from internet
+in custom origin config block mention http_port , https_port , origin_protocol_policy, origin_ssl_protocols
+mention enabled as true , disable ipv6 , 
+
+mention CDN domain name in alias roboshop-dev.sowjanya.fun
+mention default cache behaviour -- here mention allowed_methods as default  
+cached methods -- use default
+mention target_origin_id as frontend-dev.sowjanya.fun
+select viewer_protocol_policy as https-only
+mention cache policy id --get policy id from cloudfront -- policies -- cache -- select caching disabled -- copy id from here and mention in code -- this is manual process
+to get cache policy id dynamically use data source mention it in data.tf
+and refer that from locals
+the actual name of caching disabled is Managed-CachingDisabled
+get cache id of caching optimized using data source and refer that from locals
+the actual name of caching optimized is Managed-CachingOptimized -- use this name in data source
+
+
+write  ordered_cache_behaviour
+in that mention path pattern as /media/* , allowed methods , cached methods as GET , HEAD , OPTIONS
+target origin id as frontend-dev.sowjanya.fun
+viewer protocol policy as https-only
+mention cache policy id as caching optimized
+
+write  ordered_cache_behaviour
+in that mention path pattern as /images/* , allowed methods , cached methods as GET , HEAD , OPTIONS
+target origin id as frontend-dev.sowjanya.fun
+viewer protocol policy as https-only
+mention cache policy id as caching optimized
+
+mention price-class as priceclass-all
+
+we can put geo restriction -- in restriction type -- white list -- if u mention as * -- all countries will be white listed
+otherwise mention countries names which u want to whitelist
+otherwise mention countries names which u want to blacklist , if u mention -- in restriction type -- white list -- countries names in blacklist our website will not be available in those countries
+if u set restriction type as none -- we can access our website from all countries
+write tags for CDN
+finally select our acm certificate arn & get arn certificate here by using data source & refer it using locals
+
+in acm repo -- save acm arn in ssm parameter store 
+
+now we have to create r53 record as alias with cloudfront arn
+here mention domain name , hosted zone id 
+
+provider.tf
+============
+copy provider here
+
+variables.tf
+============
+variable "project" {
+    default = "roboshop"
+}
+
+variable "environment" {
+    default = "dev"
+}
+
+variable "zone_id" {
+    default = "Z05013202FKF0ZL12WAOP"
+}
+
+variable "domain_name" {
+    default = "daws88s.online"
+}
+
+main.tf
+========
+resource "aws_cloudfront_distribution" "roboshop" {
+  origin {
+    # https://frontend-dev.daws88s.online
+    domain_name              = "frontend-${var.environment}.${var.domain_name}"
+    origin_id                = "frontend-${var.environment}.${var.domain_name}"
+
+    custom_origin_config  {
+        http_port              = 80 // Required to be set but not used
+        https_port             = 443
+        origin_protocol_policy = "https-only"
+        origin_ssl_protocols   = ["TLSv1.2", "TLSv1.1"]
+    }
+  }
+
+  enabled             = true
+  is_ipv6_enabled     = false
+  
+  # CDN URL https://roboshop-dev.daws88s.online
+  aliases = ["${var.project}-${var.environment}.${var.domain_name}"]
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "frontend-${var.environment}.${var.domain_name}"
+
+    viewer_protocol_policy = "https-only"
+    cache_policy_id = local.cachingDisabled
+  }
+
+  # Cache behavior with precedence 0
+  ordered_cache_behavior {
+    path_pattern     = "/media/*"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id = "frontend-${var.environment}.${var.domain_name}"
+
+    viewer_protocol_policy = "https-only"
+    cache_policy_id = local.cachingOptimized
+  }
+
+  # Cache behavior with precedence 1
+  ordered_cache_behavior {
+    path_pattern     = "/images/*"
+    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
+    cached_methods   = ["GET", "HEAD", "OPTIONS"]
+    target_origin_id = "frontend-${var.environment}.${var.domain_name}"
+
+    viewer_protocol_policy = "https-only"
+    cache_policy_id = local.cachingOptimized
+  }
+
+  price_class = "PriceClass_All"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+      #locations        = ["US", "CA", "GB", "DE"]
+    }
+  }
+
+  tags = merge(
+    {
+        Name = "${var.project}-${var.environment}-frontend"
+    },
+    local.common_tags
+  )
+
+  viewer_certificate {
+    acm_certificate_arn = local.acm_certificate_arn
+    ssl_support_method  = "sni-only"
+  }
+}
+
+resource "aws_route53_record" "cdn" {
+  zone_id = var.zone_id
+  name    = "${var.project}-${var.environment}.${var.domain_name}"
+  type    = "A"
+  
+  # CDN details
+  alias {
+    name                   = aws_cloudfront_distribution.roboshop.domain_name
+    zone_id                = aws_cloudfront_distribution.roboshop.hosted_zone_id
+    evaluate_target_health = true
+  }
+  allow_overwrite = true
+}
+
+data.tf
+=======
+data "aws_cloudfront_cache_policy" "cachingDisabled" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_cache_policy" "cachingOptimized" {
+  name = "Managed-CachingOptimized"
+}
+
+data "aws_ssm_parameter" "acm_certificate_arn" {
+  name = "/${var.project}/${var.environment}/frontend_alb_certificate_arn"
+}
+
+locals.tf
+==========
+locals {
+ cachingDisabled = data.aws_cloudfront_cache_policy.cachingDisabled.id
+ cachingOptimized = data.aws_cloudfront_cache_policy.cachingOptimized.id
+ acm_certificate_arn = data.aws_ssm_parameter.acm_certificate_arn.value
+ common_tags = {
+        Project = var.project
+        Environment = var.environment
+        Terraform = "true"
+    }
+}
+
+
+
+open gitbash --
+terraform init
+terraform plan
+terraform apply -auto-approve
+
+by this cloudfront distribution & behaviours , r53 record related to it will be created
+
+in companies we will use vpn , from vpn only we will connect to bastion_host
+bastion host is for admins 
+if u give bastion host access they cannot check api's are giving proper response or not
+for developers , we will give vpn access , vpn uses forward proxy (it is client aware , used for content filtering , content monitoing , anonymous access)
+every request goes through vpn only -- companies will block or allow everything using vpn
+so now we create vpn instance -- with name OpenVPN & configure it
+from vpn we can connect to bastion host
+give OpenVPN access to developers to check api functionality
+
+to provide high security we can move bastion_host to private subnet
+to provide high security we can implement NACL
+

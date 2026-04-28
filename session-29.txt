@@ -98,7 +98,7 @@ plugin is nothing but python code executing in the background
 our inventory file should end with aws_ec2.yaml
 
 now create one file -- in ansible-roboshop-roles -- frontend.aws_ec2.yaml
-=====================
+==========================================================================
 plugin: amazon.aws.aws_ec2
 regions:
 - us-east-1
@@ -275,7 +275,8 @@ command -- ansible-inventory -i frontend.aws_ec2.yaml --list
 if we try to execute ansible-playbook to configure frontend 
 command to execute -- ansible-playbook -i frontend.aws_ec2.yaml -e component=frontend roboshop.yaml
 
-ansible at a time by default can connect to 5 servers . these are called as forks. we can control this -- for that mention in ansible.cfg
+ansible at a time by default can connect to 5 servers . these are called as forks. we can control this -- for that mention in
+ansible.cfg
 ===========
 forks = 8
 

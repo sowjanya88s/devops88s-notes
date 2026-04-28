@@ -1,0 +1,339 @@
+FROM -> refer base OS
+RUN -> to configure image (executed at run time)
+CMD -> command executed at the time of container creation (executed at build time)
+one image can have multiple RUN instructions & one CMD instruction
+
+LABEL -> metadata of the image
+EXPOSE -> port information
+ADD -> same as COPY but 2 extra capabilities. can download content directly from internet and untar the file
+COPY -> copy the files from local to image
+USER -> to mention the user that container should be running on
+WORKDIR -> working directory of the image/container
+ENV -> env variables to the container
+ARG -> variables at build time, cant be accessed inside container. ARG can be first instruction before 	FROM to supply the version
+ENTRYPOINT -> command to be executed while creating container. it cant be overridden, if we try it will go append. CMD can be overridden. CMD can supply default args for ENTRYPOINT. we can always override default args
+
+create one server and connect to that server
+
+ONBUILD
+=======
+our image can be used by someone else. but we want to put some conditions to use our image. that can be enforced using ONBUILD instruction..
+
+our nginx image expects index.html while it is used by others.
+
+create repo -- ONBUILD
+
+Dockerfile
+===========
+From alamalinux:9
+RUN yum install nginx -y
+RUN rm -rf /usr/share/nginx/html/index.html
+#this ONBUILD instruction runs when someone uses this image
+ONBUILD COPY index.html /usr/share/nginx/html/index.html
+CMD ["nginx", "-g" , "daemon off;"]
+
+push this code to git & pull to server
+cd dockerfiles/ENTRYPOINT
+docker build -t nginx:1.0.0 .
+
+now create test repo inside ONBUILD
+test -- Dockerfile
+===================
+FROM nginx:1.0.0
+
+git pull
+cd test
+docker build -t onbuild-test:1.0.0 .
+error -- failed to build -- index.html not found
+it is expecting index.html while using image
+now create index.html
+
+index.html
+===========
+<h1> I am from ONBUILD test </h1>
+
+git pull
+docker build -t onbuild-test:1.0.0 .
+it will be executed successfully
+
+
+now lets create docker images for roboshop project
+create one repo -- roboshop-docker 
+
+
+advantage in containers -- there is no need to maintain os 
+i.e 
+OS releases -> 8,9,10, etc..
+configurations -> packages update
+programming languages should be updated -> nodejs 20,21, etc..
+we use Ansible to configure the application 
+efforts we put on os are becoming high
+when we moved to containers -- ansible usage becomes less
+
+lets use official mongodb image to configure
+we don't care about underlying os & our application should run successfully
+our project needs mongodb 7 version -- open docker hub -- search -- mongodb -- search for version 7
+we should load some scripts into mongo database 
+in mongodb official documentation -- place the scripts to be executed in /docker-entrypoint-initdb.d/*.js -- they will be executed automatically while creation 
+now download catalogue code -- in that u will find the script to load data into mongodb -- name of the script is -- master-data.js
+place master-data.js into mongodb repo
+during container run time -- master-data.js will be copied to /docker-entrypoint-initdb.d/ and runs that script
+
+
+roboshop-docker -- mongodb -- Dockerfile
+=========================================
+FROM mongo:7.0
+COPY master-data.js /docker-entrypoint-initdb.d/
+
+connect to server
+git pull
+cd roboshop-docker/mongodb 
+docker build -t mongodb:1.0.0 .
+docker images
+docker run -d --name mongodb mongodb:1.0.0
+docker ps
+u can see mongodb is running
+
+next lets see catalogue , catalogue runs on nodejs
+goto docker hub -- search for -- nodejs 20 image
+check roboshop documentation & write instructions accordingly
+we r using /app to deploy the catalogue
+we will see creation of roboshop user creation while discussing docker best practices
+now copy catalogue code into catalogue repo -- use COPY instruction for that
+next we have to install npm -- use RUn instruction for that
+systemctl command does not works here
+take path from execstart -- node & file name -- server.js
+we have to pass mongo url also
+we can check mongodb ip by using command -- docker inspect mongodb
+but this ip address changes when mongodb restarts
+so use container name as mongodb_url
+
+roboshop-docker -- catalogue -- Dockerfile
+===========================================
+FROM node:20
+WORKDIR /app
+COPY package.json .
+COP *.js .
+RUN npm  install
+ENV MONGO="true" \
+    MONGO_URL="mongodb://mongodb:27017/catalogue"
+CMD ["node", "server.js"]
+
+git pull
+docker build -t catalogue:1.0.0 .
+docker run -d --name catalogue catalogue:1.0.0
+doker ps
+we can see catalogue is running
+docker exec -it <container-name> bash
+curl http://localhost:8080/health
+{"app":"OK","mongo":false}
+catalogue is not able to connect mongodb
+error -- unknown servers
+
+networking
+==========
+to see the ip info in server -- ifconfig
+
+in our home network -- external ip & internal ip will be provided by modem or default gateway
+we r connecting to internet by using wifi interface
+
+imagine server is in AWS , AWS is providing internet by using ethernet , with the ethernet (its nothing but server private ip address) only network comes
+
+when we install docker in server  -- it creates docker-0 virtual interface -- this allocates ip addresses to containers -- mongodb & catalogue
+
+docker inspect mongodb 
+in out put we can see gateway -- 172.17.0.1
+IP address (mongodb) -- 172.17.0.2
+
+to see the network drivers in server --
+docker network ls
+there will be 2 types of network drivers -- bridge & host
+docker bydefault uses bridge network
+
+host network  -- using ethernet directly
+bridge network means -- creation of docker interface & allocating ip addresses directly from that interface
+
+when u want to use host network use below command --
+docker run --network host nginx
+we can directly access the nginx on host port 80 -- open browser -- http://<public-ip>
+can we use host port 80 once again? -- no
+docker inspect <container-id>
+u cant find ip address here
+
+by using host network the container is not secure & we can't reuse multiple ports
+while using host network , we can accees mongodb & catalogue by using host network only
+
+when we use bridge network -- traffic flow -- ethernet or host network (80:80)-- docker -- mongodb , catalogue
+
+docker uses by default bridge network
+default bridge network containers can't communicate with each other..
+
+so you should create your own bridge network that why catalogue is not able to communicate with mongodb
+
+command to create our own network --
+docker create network roboshop
+
+to see networks available in server --
+docker network ls
+roboshop bridge local
+
+mongodb & catalogue are using default bridge network -- disconnect them from that --
+docker network disconnect bridge mongodb
+docker network disconnect bridge catalogue
+
+now connect mongodb & catalogue into roboshop network --
+docker network connect roboshop mongodb
+docker network connect roboshop catalogue
+
+now check --
+ifconfig
+in output u can see br-<id> -- is the bridge network we have created now -- check its default gateway -- 172.18.0.1
+docker inspect mongodb
+ip (mongodb) : 172.18.0.2
+docker inspect catalogue
+ip (catalogue) : 172.18.0.3
+
+when we use our own bridge network -- containers can communicate with each other on their host names
+now check --
+docker exec -it catalogue bash
+u can see catalogue can connect to mongodb
+
+summary:
+========
+when you install docker, it creates one bridge network with name also as bridge
+by default containers get IP address from this network with name bridge
+if you use default bridge network you cant communicate between the containers using names
+you should create your own bridge network
+
+now lets create frontend
+we r using nginx:1.24 in our project
+goto docker hub -- tags -- search -- 1.24.0
+firstly we have to remove default index.html page & remove default nginx.conf also
+copy our nginx.conf & download our frontend code 
+place frontend code into static repo  & copy that into repo
+
+in nginx.conf 
+=============
+change the catalogue location line --
+location /api/catalogue/ { proxy_pass http://catalogue:8080/; }
+
+create repo -- frontend -- Dockerfile
+======================================
+FROM nginx:1.24.0
+RUN rm -f /usr/share/nginx/html/index.html
+RUN rm -f /etc/nginx/nginx.conf
+RUN  rm -f /etc/nginx/conf.d/default.conf
+COPY static /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+
+
+connect to server & pull the code
+cd frontend
+docker build -t frontend:1.0.0 .
+docker run -d -p 80:80 --network roboshop --name frontend frontend:1.0.0 
+docker ps
+open browser -- http://<public-ip>
+if u didn't see catalogue -- check logs -- 
+docker logs frontend
+error -- /usr/share/nginx/html/api/catalogue/categories failed no such file or directory
+
+docker exec -it <container-id> bash
+cd /etc/nginx/conf.d
+here we can see one default.conf file
+sometimes this conf sets automatically
+so remove this -- mention in Dockerfile of frontend
+
+now remove the previous frontend image & rebuild the image again --
+
+docker rm -f frontend
+docker build -t frontend:1.0.0 .
+docker run -d -p 80:80 --network roboshop --name frontend frontend:1.0.0 
+docker ps
+open browser -- http://<public-ip>
+u should see the catalogue products now
+
+let see the user & cart & redis 		
+
+user is dependent on redis
+
+in redis -- we r installing redis & starting & enabling the redis
+if we do any customization on redis then we need to write Dockerfile otherwise no need
+so we can run redis directly --
+docker run -d --name redis --network roboshop redis:7
+docker ps
+
+let see user
+create repo -- user
+download user code & copy that into repo
+
+Dockerfile
+==========
+FROM node:20
+WORKDIR /app
+COPY package.json .
+COPY *.js .
+RUN npm install
+ENV MONGO="TRUE" \
+    MONGO_URL="mongodb://mongodb:27017/catalogue" \
+    REDIS_URL="redis://redis:6379"
+CMD ["node", "server.js"]
+
+push to git & pull to server
+
+docker build -t user:1.0.0 .
+docker run -d --name user --network roboshop user:1.0.0
+docker ps
+
+
+
+lets see cart 
+create repo -- cart
+download cart code & copy that into repo
+
+Dockerfile
+==========
+FROM node:20
+WORKDIR /app
+COPY package.json .
+COPY server.js .
+RUN npm install
+ENV REDIS_HOST="redis" \
+    CATALOGUE_HOST="catalogue" \
+    CATALOGUE_port="8080"
+CMD ["node", "server.js"]
+
+push to git & pull to server
+
+
+docker build -t cart:1.0.0 .
+docker run -d --name cart --network roboshop cart:1.0.0
+docker ps
+
+now open frontend conf file and make changes in it
+add hosts of user & cart 
+
+in nginx.conf 
+=============
+change the user & cart location line --
+location /api/user/ { proxy_pass http://user:8080/; }
+location /api/cart/ { proxy_pass http://cart:8080/; }
+
+because of changes -- we need to rebuild the image of frontend
+docker build -t frontend:1.0.0 .
+docker run -d -p 80:80 --name frontend --network roboshop frontend:1.0.0
+
+now open browser -- http://<public-ip-of-server>:80
+check catalogue & login as user & add item to cart
+
+
+now check the image sizes 
+docker images
+image size should be less than 1GB
+by reducing image size scaling becomes very easy -- this comes under best practice
+
+goto docker config file -- there we can change the ip range of bridge network
+
+
+
+
+

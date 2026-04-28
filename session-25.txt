@@ -26,8 +26,8 @@ before loading data into mongodb -- first check data is available in mongodb
 for that we have used one command in shell , take that command
 mention mongodb_host as variable in inventory file then we can get access anywhere in entire folder (i.e ansible-roboshop)
 and take that output into a variable
-if the variable contains negative value -- schema does not exist
-if the variable contains positive value -- schema exists , so load the products
+if the variable contains negative value -- schema does not exist , so load the products
+if the variable contains positive value -- schema exists
 while loading schema into db, write condition output of variable is -ve value
 
 to run any application, we should install those application dependancies (install prog language , create system user , create directory , download the application code , unzip the code in new directory , install dependancies , if needed load the data into db)

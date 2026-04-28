@@ -1,0 +1,281 @@
+there are 2 steps
+1. build the image
+2. run the image , before running the image we need to make sure that custom bridge network is created
+
+there are dependencies between the components
+
+docker compose -- it's an yaml file 
+it can build the images
+it can define the dependencies between the components
+it can start all the components at a time
+it can remove all the components at a time
+u can define network & volumesa also here
+so we can mention all these things in docker compose file
+it can make our job easy
+
+search -- docker compose yaml file
+
+open dockerfiles repo -- create a file with name -- docker-compose.yaml
+we should create network roboshop
+for all service in docker-compose -- roboshop network will be set
+there is no need to build redis image , pull the image directly from dokcer hub
+yesterday we have done upto cart
+
+we can write build in 2 ways
+build:
+ dockerfile: mongodb.Dockerfile
+
+or 
+
+build: ./mongodb
+
+docker-compose.yaml
+===================
+services:
+ mongodb: 
+  build: ./mongodb # it moves to mongodb directory
+ image: joindevops/mongodb:1.0.0 # docker build -t joindevops/mongodb:1.0.0 .
+ container_name: mongodb
+
+ catalogue:
+  build: ./catalogue
+ image: joindevops/catalogue:1.0.0
+ container_name: catalogue
+ depends_on:
+ - mongodb
+
+user:
+  build: ./user
+ image: joindevops/user:1.0.0
+ container_name: user
+ depends_on:
+ - redis
+
+cart:
+  build: ./cart
+ image: joindevops/cart:1.0.0
+ container_name: cart
+ depends_on:
+ - redis
+
+shipping:
+  build: ./shipping
+ image: joindevops/shipping:1.0.0
+ container_name: shipping
+ depends_on:
+ - MySQL
+ - cart
+
+payment:
+  build: ./payment
+ image: joindevops/payment:1.0.0
+ container_name: payment
+environment:
+ CART_HOST: "cart"
+ CART_PORT: "8080"
+ USER_HOST: "user"
+ USER_PORT: "8080"
+ AMQP_HOST: "rabbitmq"
+ AMQP_USER: "roboshop"
+ AMQP_PASSWORD: "roboshop123"
+depends_on:
+ - rabbitmq
+ - cart
+ - user
+
+
+
+
+redis:
+ image: redis:7.0
+ container_name: redis
+
+mysql:
+  build: ./mysql
+ image: joindevops/mysql:1.0.0
+ container_name: MySQL
+
+rabbitmq:
+ image: rabbitmq:3.0
+ environment:
+   RABBITMQ_DEFAULT_USER: roboshop
+   RABBITMQ_DEFAULT_PASSWORD: roboshop123
+ container_name: rabbitmq
+ 
+
+frontend:
+ build: ./frontend
+ image: joindevops/frontend:1.0.0
+ container_name: frontend
+ ports:
+ - "80:80"
+ depends_on:
+ - catalogue
+ - user
+ - cart
+ - shipping
+ - payment
+
+
+
+networks:
+ default:
+   driver: bridge
+   name: roboshop
+   external: false # if true , u need to create network manually
+
+
+docker ps
+
+command to build images--
+docker compose build
+
+command to build a particular image -- 
+docker compose build mongodb
+
+after image rebuild use below command to start container --
+docker compose up -d  
+by running above command -- if images available in docker hub related to roboshop project will be used to run containers
+
+to build images along with container creation --
+docker compose up -d --build
+
+to stop containers --
+docker compose down
+
+command to remove all images --
+docker rmi -f `docker images -aq`
+
+
+let see MySQL , we r using MySQL 8 version
+open docker hub -- search MySQL 8
+we can load data from MySQL
+download shipping code & place db folder in MySQL folder
+in db folder -- schema.sql is not needed so delete it
+.sh , .sql files will be executed automatically when we place files in /docker-entrypoint-initdb.d
+we need to set root password
+mention root password in ENV -- that will be set as root password
+
+create repo -- MySQL -- 
+
+Dockerfile
+==========
+FROM MySQL:8.0
+ENV MYSQL_ROOT_PASSWORD="Roboshop@1"
+COPY db/ /docker-entrypoint-initdb.d
+
+
+git pull
+docker compose build mysql
+
+lets see shipping
+create repo -- shipping 
+copy pom.xml & src folder into shipping
+with maven , java will be installed automatically
+in documentation 4 version is used for maven , its the latest in docker , so use 3.9 instead
+
+Dockerfile
+===========
+FROM maven:3.9.14
+EXPOSE 8080
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package
+RUN mv target/shipping-1.0.jar shipping.jar
+ENV CART_ENDPOINT="cart:8080"
+    DB_HOST="MySQL"
+CMD ["java", "-jar", "shipping.jar"]
+
+
+git pull
+docker compose build shipping
+
+lets see RabbitMQ
+goto dockerhub -- search for rabbitmq-3 version
+we have to create username & password -- mention them in env variables
+there is no customization at the image level
+mention in docker-compose.yaml
+if we mention environment variables at Dockerfile -- we need to rebuild the image , if there are any changes
+if we mention env variables at docker compose (at run time) -- no need to rebuild the image , change the values when u need then restart the container
+building the image is expensive process
+
+docker compose up -d
+
+next lets see payment
+we are using python3.9 for this
+download the payment code & copy ( payment.ini , payment.py , RabbitMQ.py , requirements.txt) that into payment folder
+mention env variable at run time
+
+
+
+create repo -- python 
+
+Dockerfile
+==========
+FROM python:3.9
+WORKDIR /app
+EXPOSE 8080
+COPY *.py .
+COPY requirements.txt .
+RUN pip3 install -r requirements.txt
+CMD ["uwsgi", "--ini", "payment.ini"]
+
+
+git pull
+docker compose build shipping
+
+now change urls in frontend 
+nginx.conf
+==========
+ location /api/shipping/ { proxy_pass http://shipping:8080/; }
+ location /api/payment/ { proxy_pass http://payment:8080/; }
+
+rebuild the frontend image
+docker compose build frontend
+
+open browser -- http://<public-ip-of-server>:80
+check the functionality of roboshop project
+
+lets push these images into docker hub --
+docker login <username>
+password:
+
+docker compose push
+
+after pushing these images to docker hub
+docker compose down
+
+docker compose up -d
+checks for images in local -- if not found , pulls the images from docker hub & create the containers by using docker-compose.yaml file -- there is no need to build the images 
+we can do this from anywhere 
+
+we deleted the containers & created them again -- we can't get previous user details & order details
+
+bydefault containers are ephemeral , once we remove container it will remove entire data
+we need to use volumes to keep the data even containers are removed
+
+to delete old data if anything goes wrong --
+docker compose down -v 
+
+rebuild & start --
+docker compose up -d --build
+
+command to remove all images --
+docker rmi -f $(docker images -q)
+
+volumes & docker best practices -- next class
+
+part-2
+======
+use docker swam -- to do autoscaling & load balancing
+docker runs multiple docker servers -- we need to setup autoscaling & load balancing
+using this process is tough -- so many users moved to k8s
+
+
+
+
+
+
+
+ 

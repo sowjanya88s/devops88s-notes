@@ -1,0 +1,449 @@
+2 steps in containerization -- 
+1. Build the image -> Bare min OS + System packages + App run time + Code + dependencies
+2. Run the image -> port, name, background, other component urls, etc.
+
+home location of docker -- /var/lib/docker
+that is why we r increasing the size of /var while creating the server
+
+launch instance and install docker in it
+
+docker ps -> running containers
+docker ps -a -> all containers
+docker images -> show the images in server
+docker pull image-name:version  --> pulls the image
+docker create image-name:version
+docker start container-id
+docker run image-name:version = pull + create + start
+docker rm container-id -> remove the container
+
+docker run -d
+docker run -p host-port:container-port
+docker run --name <container-name>
+docker stats -> show the resources consumed by containers
+docker inspect container-id
+
+Dockerfile -> declarative way of creating custom images by using docker instructions
+
+FROM -> should be 1st instruction, to refer base OS
+RUN -> used to configure image install packages, create users, etc. used at the time of building the image
+
+docker build -t url/username/image-name:version .
+docker login
+renaming image -- docker tag image-name:version username/image-name:version
+docker push username/image-name:version
+
+search -- docker file reference
+
+CMD
+====
+used to run the container. executed at the time of running the container. it will not execute at the time of building..
+
+we can have multiple RUN instructions inside dockerfile. but only one CMD instruction
+
+after installing nginx -- we have to start it, for that
+
+systemctl start nginx -> won't work inside images, systemctl is kernel level process
+
+containers can't access kernels
+search -- nginx start command inside container
+
+syntax: ["executable","param1","param2"]
+
+create repo -- CMD --
+Dockerfile
+==========
+FROM redhat/ubi9
+RUN dnf install nginx -y
+CMD ["nginx","-g",:deamon off;"]
+
+firstly build the image --
+cd dockerfiles/CMD
+docker build -t cmd:1.0.0 .
+by this first 2 commands will be executed
+3rd command will be executed while running the image
+
+now run the container in foreground
+docker run cmd:1.0.0
+then we can't do anything on terminal
+
+your command inside dockerfile should run in foreground, but you can take it into background
+
+if the container is not running u can't access the nginx page
+
+to run container in background --
+docker run -d -p 80:80 cmd:1.0.0
+
+docker ps
+u can see cmd:1.0.0 here & cmd is executing at the time of running
+
+open browser -- http://<public-ip>:80
+
+
+LABEL
+=====
+adds the metadata to the image, used for filteration
+
+create repo -- label --
+
+Dockerfile
+==========
+#almalinux is exactly same as redhat image, but completely free
+FROM almalinux:9
+LABEL   COURSE="Docker" \
+	TRAINER="siva kumar" \
+	DURATION="10HRS" \
+	AUTHOR="joindevops"
+      
+this label is useful when we have have lot of images , we can use this labels for filteration
+
+cd /dockerfiles/label
+docker build -t label:1.0.0 .
+docker images
+
+filter command usage
+docker images --filter "label=COURSE=Docker"
+u can see the image with the filter 
+
+to see the option 
+docker images --help
+
+u can see tags by using below command --
+docker inspect label:1.0.0
+
+can we run label image?
+docker ps -a
+label:1.0.0 exited
+we have to give some command to keep container busy
+if we didn't provided command -- it uses /bin/bash (its just a shell terminal) -- it does not keeps container busy
+
+now give command to it --
+docker run -d label:1.0.0 sleep 15
+docker ps
+u can see -- label:1.0.0 sleep 15
+we r telling container to goto sleep for 15 sec -- which means we r allocating container to do that task
+after sleep 15 sec -- it will exits automatically
+
+nginx -g daemon off -- this keeps the container running for infinite time
+to keep container running for infinite time -- we have to give some command
+
+
+EXPOSE
+=====
+useful to display the port information of container. it will not really open the port but provides information only to the users
+
+if we run nginx -- by default opens 80
+if we mentioned as 8080 -> can't open -- consider it as wrong information
+
+create repo -- expose
+
+Dockerfile
+==========
+FROM redhat/ubi9
+RUN dnf install nginx -y
+EXPOSE 80
+CMD ["nginx","-g",:deamon off;"]
+
+cd /dockerfiles/expose
+docker build -t expose:1.0.0 .
+docker run -d -p 8080:80 expose:1.0.0
+docker ps 
+in output we can see ports of container and host
+docker inspect expose:1.0.0
+-- in exposed ports 80
+we mention this to provide info for user
+
+if we mention EXPOSE 8080 also -- we can see exposed ports as 8080 , but it actually runs 80 port only
+
+ENV
+====
+to provide env variables to the container. we can access these env variables inside container. app code can access these env variables and use them
+
+when one component depends on another component -- in config file we have mentioned like
+Environment=MONGO_URL="mongodb://<MONGODB-SERVER-IPADDRESS>:27017/catalogue"
+
+like that we can give env variables
+
+create repo -- ENV 
+
+Dockerfile
+==========
+FROM almalinux:9
+ENV MONGO_URL="mongodb-dev.sowjanya.fun" \
+	MONGO_USER="admin"
+
+connect to server
+docker build -t env:1.0.0 .
+docker run -d env:1.0.0 sleep 100
+docker exec -it <container-id> bash
+here u can see MONGO_USER & MONGO_URL
+
+we can access these env variables inside container 
+
+COPY
+====
+used to copy the files from local to image
+before building website we have to copy the code in to server
+take nginx image directly , instead of taking base image and installing nginx into it
+if u r not sure about the version -- goto docker hub & check versions or if u don't mention the image version it takes latest version bydefault
+by taking nginx image it starts nginx bydefault
+nginx contains bydefault index.html
+remove that to avoid confusion , for that use RUN instruction
+
+
+create repo -- COPY
+
+index.html
+==========
+<h1> hi, i am from nginx container </h1>
+
+Dockerfile
+==========
+FROM nginx:1.29.7
+RUN rm -f /usr/share/nginx/html/index.html
+COPY index.html /usr/share/nginx/html
+
+docker build -t copy:1.0.0 .
+
+command to show all running containers --
+docker ps -a -q
+command to remove all containers --
+docker rm -f `docker ps -a -q`
+
+docker run -d -p 80:80 copy:1.0.0
+
+open browser -- http://<public-ip>:80
+u should see -- hi, i am from nginx container
+
+now take sample qi static website from GitHub & copy that into copy folder
+by using copy instruction we can run qi code in docker
+
+Dockerfile
+==========
+FROM nginx:1.29.7
+RUN rm -f /usr/share/nginx/html/index.html
+COPY qi/ /usr/share/nginx/html
+
+docker build -t copy:1.0.0 .
+docker rm -f `docker ps -a -q`
+
+docker run -d -p 80:80 copy:1.0.0
+
+open browser -- http://<public-ip>:80
+u should see -- qi website      	
+if u attach this ip with domain name -- we can see website with domain name					
+					
+
+ADD
+===
+used to copy the files from local to image, but it has 2 extra capabilities
+1. It can fetch the content directly from internet
+2. It can untar the content directly in the image
+						
+create repo -- ADD
+
+Dockerfile
+==========
+FROM almalinux:9
+ADD <catalogue-url> /tmp
+
+docker build -t add:1.0.0 .
+docker run -d add:1.0.0 sleep 100
+docker exec -it <container-id> bash
+cd /tmp
+ls -l
+cat <zip-file-name>
+
+let see untaring file from internet
+download tar file from internet
+and copy that into ADD folder
+
+Dockerfile
+==========
+FROM almalinux:9
+ADD <tar-file-name> /tmp/
+
+git pull
+docker build -t add:1.0.0 .
+docker run -d add:1.0.0 sleep 100
+docker exec -it <container-id> bash
+cd /tmp
+ls -l
+we can see untar file
+cat <untarred-file-name>
+
+
+ENTRYPOINT
+===========
+ENTRYPOINT is used to provide the command executed by the container when it is started.
+
+create repo -- ENTRYPOINT
+Dockerfile
+==========
+FROM alamalinux:9
+CMD ["ping","google.com"]
+
+git pull
+docker build -t ENTRYPOINT:1.0.0 .
+docker run ENTRYPOINT:1.0.0 
+by running in foreground we can see whether it is pinging or not
+
+lets override the command in CMD
+docker run ENTRYPOINT:1.0.0 ping facebook.com
+
+lets try the same with entry point
+
+ping google.com ping facebook.com
+Dockerfile
+==========
+FROM alamalinux:9
+ENTRYPOINT ["ping","google.com"]
+
+git pull
+docker build -t ENTRYPOINT:1.0.0 .
+docker run ENTRYPOINT:1.0.0 
+by running in foreground we can see whether it is pinging or not
+
+lets override the command in CMD
+docker run ENTRYPOINT:1.0.0 ping facebook.com
+name or service not known
+
+lets see the full information --
+docker ps -a --no-trunc
+in background command is executing like ping google.com ping facebook.com
+
+
+CMD vs ENTRYPOINT
+=================
+We can override the command inside CMD instruction at run time... We can't override ENTRYPOINT command if you try to do so it will go and append.. for best results we can always use both CMD and ENTRYPOINT
+
+CMD can be used to provide the default args/inputs to ENTRYPOINT.. if we want our own args we can always override CMD at runtime
+
+Dockerfile
+==========
+FROM almalinux:9
+CMD ["google.com"]
+ENTRYPOINT ["ping"]
+
+
+push to git & pull to server
+docker build -t ENTRYPOINT:1.0.0 .
+docker run ENTRYPOINT:1.0.0 
+by running in foreground we can see whether it is pinging or not
+
+lets override the command in CMD
+docker run ENTRYPOINT:1.0.0 facebook.com
+
+
+once we login to the container we r getting root user access
+by providing root access with container -- it can do anything inside server & by that it can disturb other containers
+containers should run in storage server
+mandatory thing to consider -- never run container with root access..   
+atleast one step before command -- we should create other user & use it
+
+USER
+====
+this instruction is used to change the user when container runs
+
+create repo -- user
+Dockerfile
+==========
+FROM almalinux:9
+RUN dnf install nginx -y
+RUN useradd roboshop
+USER roboshop
+CMD ["sleep","100"]
+
+push to git & pull to server
+docker build -t USER:1.0.0 .
+docker run USER:1.0.0 
+docker exec -it <container-id> bash
+u can see u have logged in as roboshop user
+
+WORKDIR
+=======
+it is used to set the working directory 
+
+use CMD to change into a directory
+create repo -- workdir
+Dockerfile
+==========
+FROM almalinux:9
+RUN mkdir /app
+RUN cd /app
+
+push to git & pull to server
+docker build -t workdir:1.0.0 .
+docker run -d -p workdir:1.0.0 sleep 100
+docker exec -it <container-id> bash
+we will be / path only
+cd command will not work inside the docker image so use work directory
+
+
+Dockerfile
+==========
+FROM almalinux:9
+RUN mkdir /app
+WORKDIR /app
+RUN echo "hello world" > hello.txt
+
+
+push to git & pull to server
+docker build -t workdir:1.0.0 .
+docker run -d -p workdir:1.0.0 sleep 100
+docker exec -it <container-id> bash
+u will be landed in /app only
+pwd
+ls -l
+u can see hello.txt here
+cat hello.txt
+
+after using WORKDIR /app -- u will be landed into /app directory --  RUN command will be executed in /app
+
+
+ENV vs ARG
+==========
+ENV -> provide env variables to container
+ARG -> provide variables to image
+
+ARG variables can't be accessed inside container, they are accessible only at the of image building. ENV variables can be accessed in container
+
+ARG can be first instruction in a special case to supply the version to base image
+
+consider at the time of image creation we have mentioned image version as 8 , later we want to change it as 9 
+instead of changing the version directly in image -- use ARG command in docker to provide version as ARG
+if user provided the almalinux version use it otherwise use version 8
+
+
+create repo -- ARG
+
+Dockerfile
+==========
+ARG version
+FROM almalinux:${version:-8}
+ARG COURSE="Docker" \
+	TRAINER="SIVA"
+RUN echo "Trainer is: ${TRAINER} , version is: ${version}"
+CMD ["sleep", "200"]
+
+
+push to git & pull to server
+docker build -t arg:1.0.0 .
+u can see almalinux 8 version runs
+u can see echo statement of trainer while building the image
+but u can't access version after FROM instruction , its purpose is to supply version to FROM instruction
+
+to provide the version at build time --
+docker build -t arg:1.0.0 --build-arg version=9 .
+
+docker run -d arg:1.0.0
+
+docker exec -it <container-id> bash
+env
+we can't see env variables here & version here
+
+
+
+
+
+
+

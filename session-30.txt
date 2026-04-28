@@ -82,7 +82,7 @@ process
 =======
 get the private key access to ansible server
 configure the path in ansible.cfg
-make sure keys are RSA based      ----- 38 mins ansible completed
+make sure keys are RSA based      
 
 Terraform
 ==========
@@ -154,7 +154,7 @@ this ls command comes from /usr/bin/ls (check with command -- which ls)
 
 echo $PATH -- when we give any command -- Linux server checks this command in all paths of output of echo $PATH
 
-when u give command in any os -- it checs paths
+when u give command in any os -- it checks paths
 
 in windows also when u give terraform command -- it checks paths where this command is available
 
@@ -197,7 +197,7 @@ clone that repo to your local machine
 
 providers
 =========
-to what terraform is going to connect is called provider , here our provider is terraform
+to what terraform is going to connect is called provider , here our provider is aws
 terraform can connect to almost every popular tool available 
 search -- terraform -- go through terraform documentation 
 there u can see all tools terraform can connect to
@@ -312,7 +312,7 @@ vpc_security_group_ids -- optional , if we don't mention security group id it wi
 lets see creation of security group
 ingress -- inbound rules
 egress -- outbound rules
-all protocols , all traffic is allowd in inbound & outbound rules
+all protocols , all traffic is allowed in inbound & outbound rules
 
 ec2.tf
 =======

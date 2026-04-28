@@ -3,13 +3,13 @@ open gitbash
 for i in 00-vpc/ 10-sg/ 20-sg-rules/ 30-bastion/ 50-backend-alb/ ; do cd $i ; terraform apply -auto-approve ; cd .. ; done
 
 connect to bastion host using its public ip
-clone ansible-roboshop-roles-tf
-cd ansible-roboshop-roles-tf
+clone terraform-roboshop
+cd terraform-roboshop
 configure databases
 
 for load balancer AWS does not allows 22 port because in background it runs as multiple instances in two az's (we have allowed LB in two az's)
 Load balancer condition -- it should run on atleast 2 az's
-so we have allowd port 80 from bastion to backend alb
+so we have allowed port 80 from bastion to backend alb
 
 now we will automate the creation of catalogue instances
 while creation of catalogue instance we have discussed 2 approaches yesterday
@@ -27,7 +27,7 @@ use terraform-data to configure catalogue
 write connection block inside it & write triggers_replace & write bootstrap.sh file to configure catalogue instance & write remote-exec to provision catalogue instance remotely from bastion host
 pass env & component name in remote-exec
 mention ansible-roboshop-roles.tf repo's http url in bootstrap.sh
-check all the code once in ansible-roboshop-roles.tf
+check all the code once in ansible-roboshop-roles-tf
 
 after completion of config in catalogue instance -- 
 connect to catalogue from bastion --
@@ -35,7 +35,7 @@ netstat -lntp
 curl http://localhost:8080/health
 
 we have to take ami of that instance
-to take ami there is no need to stop the instance but when the instance is in running state there is a chance of coming new changes in that instance an those changes will not be captured perfectly
+to take ami there is no need to stop the instance but when the instance is in running state there is a chance of coming new changes in that instance and those changes will not be captured perfectly
 when the instance is in stopped state -- it will be in stable state -- we can get AMI perfectly
 so firstly stop the instance & take ami of the catalogue instance then
 search -- aws stop instance terraform
@@ -49,7 +49,7 @@ manual procedure to take ami -- select instance -- image and templates -- create
 last time we have discussed about depends_on
 terraform usually creates all resources parallelly
 terraform-data depends on catalogue instance because while configuring catalogue we need ip of catalogue
-aws_ec2_insatnce_state depends on aws_instance
+aws_ec2_instance_state depends on aws_instance
 after creation of ec2 instance -- terraform_data & aws_ec2_instance_state both will be triggered
 when configuring instance will be stopped but we need to stop the instance after completion of configuration
 in this situation -- we have an option -- depends_on -- mention value of depends on as terraform_data.catalogue
@@ -422,7 +422,7 @@ command -- curl http://catalogue.backend-alb-dev.sowjanya.fun/categories
 output -- ["Artificial Intelligence" , "Robot"]
 
 
-note: to launch instances with diff instance types use mixed_insatnce_policy parameter in autoscaling group like below
+note: to launch instances with diff instance types use mixed_instance_policy parameter in autoscaling group like below
 
  mixed_instances_policy {
     launch_template {
@@ -442,7 +442,7 @@ note: to launch instances with diff instance types use mixed_insatnce_policy par
     }
   }
 
-when u want to update new verion of catalogue -- again new instance will be created  & we will configure latest version in that & stop instance & take ami & create new instances by using launch template
+when u want to update new version of catalogue -- again new instance will be created  &  we will configure latest version in that & stop instance & take ami & create new instances by using launch template
 
 we cannot auto scale the databases because they are stateful 
 

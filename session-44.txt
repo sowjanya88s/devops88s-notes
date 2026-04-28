@@ -215,7 +215,7 @@ when u give terraform apply command again -- a new instance will be created for 
 
 we will use terraform apply when there is a new production release
 mention app_version in vars of catalogue or ansible-roboshop-roles-tf -- group_vars -- all.yaml
-by this we can override this version when we want want
+by this we can override this version when we want 
 while configuring instance with bootstrap.sh mention app_version also & create variable app_version & mention that in bootstrap file also
 
 if we don't change the version also -- it applies again because terraform does not knows about versions -- it compares current infra with state file

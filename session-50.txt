@@ -1,0 +1,474 @@
+NACL (network access control list)
+==================================
+consider u send a request in browser , this goes through the internet & gets the response back to ur browser -- consider that ur home network contains multiple devices , how the response comes tour browser only?
+why the response does not goes to another system?
+
+when we request something --
+that request contains destination port & destination ip
+the request also contains source port & source ip -- by this response only comes to our system
+
+https://facebook.com:443
+
+ports available totally -- 0-65,535
+
+when u request something -- a random port will be opened in our system -- i.e called ephemeral port
+in that random port a process will be waiting for the response -- once the response is received that process id & port will be closed
+
+for ex:
+source ip: 192.168.1.3
+source port: 32,897
+
+search -- ephemeral ports range
+in old systems , 
+0-1023 -> system ports
+1024-5000  -> ephemeral range in old systems
+
+search -- ephemeral ports range in aws
+in new systems , 
+32768-65535 -> ephemeral port range
+ephemeral -- temporary
+
+NACL vs SG
+===========
+SG -> will be attached to instance
+   -> source can be IP address or other SG ID
+   -> we can't add DENY rule
+   -> Rules are stateful, if we are allowing port number 8080 from 10.0.1.34. while sending response back to the source an ephemeral port is opened. since SG is stateful there is no need to write seperate outbound rule
+means when we allow one ip (on particular port) in incoming traffic then outbound rule is automatically applied to same ip (on random ephemeral port)
+   
+NACL -> attached to subnet level
+     -> source can be subnet ID
+     -> NACL is first layer of defence, then SG
+     -> You can add DENY rule..(we can block a ip from here)
+     -> NACL are stateless. you have to write outbound rules also...
+
+our request flow -- vpc -- subnet -- instance
+
+public subnet can access private subnet
+private subnet can access database subnet
+there is no need to access database subnet from public subnet
+
+lets create NACL 
+lets create this NACL by targeting db subnet
+
+vpc -- Network ACL -- create network ACL
+name -- roboshop-dev-db
+vpc -- select roboshop-dev -- create
+
+select the NACL -- edit subnet associations -- select 2 db subnets -- save changes
+
+mongodb receives traffic from private subnet from port 27017
+lowest rule number validates first
+now select NACL -- edit inbound rules -- 
+rule number -- 10 
+type -- custom tcp 
+port range -- 27017
+source -- 10.0.11.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+in source we can mention <pri-ip-of-catalogue>/32
+but by doing this , in auto scaling env instances will be created and destroyed continuously -- in this case we have to change the ip by coming here -- which is difficult
+so in source we always mention subnet
+ 
+now add one more rule -- add rule
+rule number -- 15 
+type -- custom tcp 
+port range -- 27017
+source -- 10.0.12.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+there will be one default rule in every NACL
+
+now configure -- roboshop-dev
+open browser -- https://frontend-dev.sowjanya.fun
+reload this page after adding this rules in NACL
+we can't see catagories now
+
+now add outbound rules --
+rule number -- 10 
+type -- custom tcp 
+port range -- 32768-65535 
+source -- 10.0.11.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+rule number -- 15 
+type -- custom tcp 
+port range -- 32768-65535 
+source -- 10.0.12.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+but outgoing traffic is with ephemeral port numbers only
+so above two rules are enough
+open browser -- https://frontend-dev.sowjanya.fun
+reload this page after adding this rules in NACL
+we can see catagories now
+
+example:
+========
+request --> catalogue -> mongodb
+
+source IP: 10.0.11.26
+source port: 32,789
+
+destination IP: 10.0.21.5
+destination port: 27017
+
+NACL will be validated
+request -> inbound
+response -> outbound -- sent to source port
+so we have to add outbound rule with ephemeral ports
+
+when we create vpc -- default NACL will be created -- it contains default rules -- means allows all
+
+whenever we create our own NACL -- then default -- all traffic will be denied here
+
+now add inbound rules --
+for all db's -- allow their ports on private subnets
+rabbitmq receives traffic from private subnet from port 5672
+lowest rule number validates first
+now select NACL -- edit inbound rules -- 
+rule number -- 20 
+type -- custom tcp 
+port range -- 5672
+source -- 10.0.11.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+now add one more rule -- add rule
+rule number -- 25 
+type -- custom tcp 
+port range -- 5672
+source -- 10.0.12.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+redis receives traffic from private subnet from port 6379
+lowest rule number validates first
+now select NACL -- edit inbound rules -- 
+rule number -- 30 
+type -- custom tcp 
+port range -- 6379
+source -- 10.0.11.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+now add one more rule -- add rule
+rule number -- 35 
+type -- custom tcp 
+port range -- 6379
+source -- 10.0.12.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+mysql receives traffic from private subnet from port 3306
+lowest rule number validates first
+now select NACL -- edit inbound rules -- 
+rule number -- 40 
+type -- mysql
+port range -- 3306
+source -- 10.0.11.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+now add one more rule -- add rule
+rule number -- 45 
+type -- mysql 
+port range -- 3306
+source -- 10.0.12.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+incoming traffic is on different db port numbers (2017 , 6379 , 3306 , 5672)
+
+
+
+cart -> redis
+request comes from -- 
+source IP: 10.0.11.28
+source port: 32,792
+
+destination IP: 10.0.21.7
+destination port: 6379
+
+response goes to --
+source IP: 10.0.11.28
+source port: 32,792
+
+
+now from bastion -- can we login to mongodb? no
+because we did not allowed port 22 from public subnet from NACL
+we should write inbound and outbound traffic too
+now select NACL -- edit inbound rules -- 
+rule number -- 50 
+type -- ssh
+port range -- 22
+source -- 10.0.1.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+outbound rule
+rule number -- 20 
+type -- custom tcp 
+port range -- 32768-65535
+source -- 10.0.1.0/24 (private subnet CIDR range)
+allow/deny -- allow
+
+now u can connect to mongodb from bastion
+NACL denies the traffic from all other ip's & ports -- in inbound & outbound
+
+
+according to our protocol -- only private subnet should access db subnet
+according to this -- we have to place bastion in private subnet
+by this we have to connect to vpn (in public subnet) first -- then bastion (in private subnet) -- then database
+in this process only we have to implement the project
+
+we cannot connect to db's from outside -- NACL denies it
+if u want to accept connections from other vpc's -- then mention that vpc cidr in inbound source 
+we will make the network tight
+to make application secure -- we have to use SG & NACL
+
+make some changes in bastion script --
+
+bastion.sh
+===========
+cd /home/ec2-user
+git clone https://github.com/daws-88s/roboshop-infra-dev.git
+chown ec2-user:ec2-user -R roboshop-infra-dev
+cd roboshop-infra-dev/40-databases
+terraform init
+terraform apply -auto-approve
+
+# creating components
+cd /home/ec2-user
+git clone https://github.com/daws-88s/roboshop-infra-dev.git
+chown ec2-user:ec2-user -R roboshop-infra-dev
+cd roboshop-infra-dev/90-components
+terraform init
+terraform apply -auto-approve
+
+add this code in bastion.sh -- by this after  creation of bastion host -- it automatically creates databases & components
+
+use below commands to create roboshop-infra
+
+for i in 00-vpc/ 10-sg/ 20-sg-rules/ 30-bastion/ 50-backend-alb/ 70-acm/ 80-frontend-alb/ ; do cd $i; terraform apply -auto-approve; cd ..;done
+
+ls -dr *
+prints all directories in reverse order
+
+use below commands to destroy roboshop-infra
+for i in $(ls -dr *); do cd $i; terraform init; terraform destroy -auto-approve; cd ..;done
+
+delete the nacl manually -- its associated with db subnets -- otherwise vpc will not be deleted
+
+create one instance --
+select devops-practice ami
+in default subnet & vpc
+storage -- 50 gb
+launch instance
+
+docker data will be available here(about images & containers)
+DOCKER_HOME = /var/lib/docker
+
+we have created server with 50gb
+we have to extend the disk where we want
+add extra 30gb to /var
+use below commands
+df -TH
+lsblk
+sudo growpart /dev/nvme0n1 4
+lvextend -L +30G /dev/RootVG/varVol
+xfs_growfs /var
+df -Th
+now u can see /var is extended with 30 gb
+
+now install docker in server
+commands --
+sudo dnf -y install dnf-plugins-core
+
+sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+
+sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+systemctl start docker
+
+systemctl enable docker
+
+sudo usermod -aG docker $USER
+
+exit and login again
+
+running containers
+docker ps 
+
+images in server
+docker images
+
+docker run nginx
+it checks image available in local or not. if available it will create containr from that image , otherwise it will download from docker hub , keep it in local and then creates the container & starts the container
+
+if u don't mention version -- it takes latest version , container runs in foreground , by that we can't do anything
+
+to tun container in background --
+docker run -d nginx
+
+-d -- detach mode
+by this container will be created  & runs in background
+
+containers run in foreground, but we should take them to background
+because we should use terminal
+
+container is like another process in Linux
+ps -ef 
+in output we can see this --
+root 3337 3311  0 02:39 ?  00:00:00 nginx: master process nginx -g daemon off;
+PID: 3337
+PPID: 3311 -> docker engine
+nginx -g daemon off; -- command to start nginx
+
+how to access nginx in browser? 
+we are running this nginx in docker
+so first we need to reach the host -- next reach the container
+
+docker ps
+shows container id -- for ex -- b3478
+
+docker rm -f b3
+removes the container
+
+to expose this container & application running in container -- we need to expose the port. for that use below command --
+ 
+docker run -d -p 80:80 nginx
+-p 80:80 -- means host-port : container-port
+so nginx container opens port 80
+host port is our choice , we can give 8080 as host port -- like below
+docker run -d -p 8080:80 nginx
+
+docker ps
+
+by this we can run 2 nginx containers in one server
+we can run no.of containers 
+
+open browser -- http://<public-ip-of-server>:80 or http://<public-ip-of-server>:8080
+
+port will be forwarded from host to container using -p option
+
+command to login to interactive terminal in running container  --
+docker exec -it <container-id> bash
+root@<container-id>: 
+now we r inside the container
+root@<container-id>: cd /usr/share/nginx/html
+root@<container-id>: ls -l
+root@<container-id>: echo "<h1>Hi from docker</h1>" > hi.html
+exit
+
+
+open browser -- http://<public-ip-of-server>:8080/hi.html
+
+to see full information about container--
+docker inspect <container-id>
+we can see container ip , port opened by container here
+container is like mini server
+
+to know the memory & cpu used by containers
+docker stats
+
+to remove both containers --
+docker rm -f <1st-container-id> <2nd-container-id>
+
+if we didn't mentioned name of the docker -- docker takes two random dictionary words & names it
+we can give desired name to docker container using below command --
+docker run -d -p 80:80 --name frontend nginx
+
+docker ps
+u can see name of docker container will  be frontend
+
+u can login to docker container by using below command --
+docker exec -it frontend bash
+
+nginx container port is fixed -- will be mentioned in official image documentation also
+we can give desired port for host
+
+
+we need to create our own images for our customized applications 
+
+
+using Dockerfile -> we can create our own customised images
+
+FROM
+=====
+FROM is used to mention the base OS of the image.. it should be first instruction in Dockerfile
+
+search -- docker file reference
+in server give command --
+docker pull redhat/ubi9
+
+by this redhat:ubi9:latest image will be downloaded to our server
+
+create one repo -- dockerfiles -- 
+create one folder in it -- FROM
+create one file in it -- Dockerfile
+in dockerfile firstly we have to mention image name -- use rhel 9 image
+we r using rhel -> redhat image
+
+Dockerfile
+===========
+FROM redhat/ubi9
+
+push this repo to git
+clone the git repo to server
+cd dockerfiles/
+cd FROM/
+
+build the image --
+docker build -t from:1.0.0 .
+we r telling docker to build the image by using Dockerfile in current directory
+
+docker images
+we can see the image with name from:1.0.0
+
+now we have to push this image to docker hub
+for that we need to login to docker hub from the server --
+docker login -u <username>
+give password
+
+our account url will be like this -- https://hub.docker.com/repositories/<username>
+while pushing the image to docker hub -- 
+mention url like this docker.io/<username>/image-name:version
+
+docker push from:1.0.0 -- throws error push access denied
+
+url/username/image-name:version
+docker.io/<username>/from:1.0.0
+
+docker tag from:1.0.0 <username>/from:1.0.0
+docker images
+image with name <username>/from:1.0.0 will be created
+
+docker push <username>/from:1.0.0
+this will push the image to docker hub
+
+open browser -- ur account -- myhub -- repos -- from -- tags -- with 1.0.0 tag u can find ur image
+
+once our image is in docker hub -- we can pull it where ever we want
+
+flow -- write code in vsc -- push to git -- pull to server -- build image -- push to docker hub
+
+RUN
+===
+RUN instruction is used to install packages or configure image
+
+dockerfiles -- create folder -- RUN -- Dockerfile
+
+Dockerfile
+==========
+FROM redhat/ubi9
+RUN yum install nginx -y
+
+push to GitHub & pull to server
+in server -- 
+cd RUN/
+docker build -t <username>/run:1.0.0 .
+simultaneously builds the image & pushes to docker hub
+
+docker images 
+<username>/run:1.0.0
+
+
+
+
+
+
+

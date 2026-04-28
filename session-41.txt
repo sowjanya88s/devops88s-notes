@@ -85,7 +85,7 @@ ansible playbook runs in MySQL server -- MySQL instance tries to get password fr
 we have to attach a role to MySQL -- by using that role -- it can get the password from ssm parameter store
 
 now we have to create one role -- attach iam policy it -- it can get the ssm parameter of MySQL password
-create instance_profile & attch it to MySQL instance
+create instance_profile & attach it to MySQL instance
 
 search -- aws iam role terraform
 iam role naming convention is like -- Roboshop-Dev-MySQL
@@ -363,7 +363,7 @@ policy      = templatefile("mysql-iam-policy.json", {
 
 instead of env name use ${environment} in iam policy name 
 in bootstrap also -- we can pass environment variable
-pass this env name drom provisioner remote-exec
+pass this env name from provisioner remote-exec
 
 MySQL -- vault.yaml -- also -- instead of dev use {{ environment }}
 while using this ansible code in prod -- environment is prod -- so that prod value is passed
@@ -392,14 +392,14 @@ load balancer -- is like delivery manager
 target group is group of instances -- team members
 LB rules -- rules
 Listener -- 80/443
-health check -- availablility check
+health check -- availability check
 when passing traffic to an instance -- we should check the instance is running or not & whether it is available or not
 consider LB contains 4 instances -- queries for running instances -- assigns traffic to instances using round-robbin algorithm
 team member -- ec2 instances
 LB checks the rules -- before passing the request -- consider that we are in frontend -- u clicked on catalogue -- request will be passed to catalogue instance
 
 on private LB -- we will allow 80 port
-on publice LB -- we will allow 443 port
+on public LB -- we will allow 443 port
 
 we will know traffic -- check cpu utilization -- if cpu-utlization > 80 -- server is busy
 if traffic is increased -- auto scaling -- creates new instances by using launch template & add to target group

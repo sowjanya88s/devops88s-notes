@@ -1,0 +1,250 @@
+Family History evolution
+
+100 years back
+
+joint familities
+
+5 couples
+20 children
+25-30 members
+individual big houses
+
+advantages
+==========
+no shared, we have freedom
+we will have privacy
+everything in our control, we can design
+
+disadvantages
+==========
+too much cost for construction
+maintainance on us
+time taking process to build
+
+our parents moved to city for education purpose
+1 couple
+2 or 3 kids
+a flat is enough
+
+advantages
+==========
+low maintainance
+less cost compared to individual houses
+just pay and joint
+less time
+
+disadvantages
+==========
+less privacy
+space is shared
+we dont have control 
+more rules
+
+we moved to metro cities for jobs
+min 30 required to join in pg
+
+individuals
+==========
+single person
+shared room/pg
+
+advantages
+==========
+less time
+no maintainance at all
+no responsibility
+too less cost compared to individual house or flats
+
+disadvantages
+=========
+no privacy
+everything is shared
+0 control
+
+based on size accommodation changed
+
+application revolution
+======================
+Legacy = Frontend + Backend
+JSP+Servlets+HTML
+application size is more than 150Mb(only text)
+
+disadvantages
+=============
+a small problem in frontend/backend crash everything
+a small change should create new version.. new application release (process of change is difficult -- takes upto 2-3 days)
+size is very big
+they used physical baremetal servers
+
+later ,
+
+monolitic
+============
+frontend  -> API -> backend(catalogue+user+cart+ratings etc.)
+technologies -- angular js
+frontend and backend are connected using API
+
+advantages
+==========
+problem in frontend can't create problems in backend.. both are different
+when there are changes in frontend --  we will do release process for frontend 
+size is 50% reduced
+speed of provisioning(boot time -- time consumed to connect to server) is reduced
+
+then ,
+Virtulisation 
+server -> 100GB RAM, 2TB HD, 16 cores, host OS(vmware esxi)
+we can divide the hardware into logical units virtually
+VM -> 1GB RAM, 8GB HD, 1 processor, Guest OS(windows)
+VM -> 2GB RAM, 20GB HD, 2 processor, Guest OS(Linux)
+then resource utilization increases
+backend(catalogue+user+cart+ratings etc.)
+
+disadvantages
+=============
+all components must use same programming language
+single component problem can crash entire backend
+
+later ,
+
+MicroServices
+=============
+frontend -> components got separated -- user, cart, catalogue, ratings, etc..
+
+advantages
+==========
+multiple programming languages
+release process is different
+problem in a single component(i.e ratings) still keeps the application running
+less downtime
+components connected through API -- api developers will give URL, Method, Sample request, expected response, status code in a document
+based on that document -- frontend will be developed
+	
+later,
+
+containerisation
+=================
+we can run multiple containers(in one container we can run one component) in one vm
+1. no resource allocation, can use resources dynamically
+2. less cost
+3. less boot time
+4. less size
+5. portable (easy to install) and immutable
+6. scalable (increase the no.of servers -- easy) and reliable
+7. less privacy, but we can address this
+
+when internet usage increases -- pressure on internet increases --to improve customer satisfaction -- technology is evolving
+
+Docker
+======
+AMI = OS + System packages + App run time (programming language) + App code + App dependencies 
+Instance/Server/VM is the running version of -> AMI 
+Docker Image = Bare minimum OS + System packages + App run time + App code + App dependencies -> Container
+difference between AMI and Docker Image is OS size
+os size in AMI -- 4gb or 5gb
+
+when we run windows -- in background so many processes runs in task manager -- we don't know the purpose of those processes (we don't know how many resources they r consuming)
+
+server responsibility -- application hosting & the application should run 
+extra commands & packages are not useful
+without extra capabilities os becomes bare minimum os , then os size is less than 10 mb
+to interact with electronic device it needs os
+for ex -- wifi router -- it contains embedded os(bare min os) -- its responsibility is communication with internal devices & sending requests from here to there
+
+here in bare min os -- we will install commands & packages required to run application -- os size decreases
+
+by installing unnecessary things application gets hacked
+when we use os only to run application -- chances of hacking becomes less
+
+container is the running version of docker image
+docker image & AMI are immutable
+size of docker image is less -- so it's portable
+when we change something in docker image or AMI -- image id changes , but we cannot make changes in image -- so they are immutable
+reliable -- by placing docker image in Linux or windows or MAC -- gives same result where ever u run the image
+
+
+
+launch instance
+name -- docker
+ami -- devops-practice
+create in default vpc -- launch  
+
+read documentation on medium -- https://medium.com/@joindevops/why-containerization-is-popular-how-to-understand-the-advantages-55261a17517c
+
+here hypervisor is nothing but VMware
+by using VMware only we can divide physical resources into logical units
+to manage hypervisor only we need to hire a team
+
+advantages in containerization
+here in cloud we need to instal docker no need to use VMware
+resource utilization is more in containers
+we can scale resources very fastly
+we need to address performance and security in containers
+performance will be decreased when u cross multiple layers ( hardware , host os , container) but it is negligible
+
+
+connect to instance and install docker in it
+open docker.com -- find commands to install docker in rhel-9
+sudo dnf -y install dnf-plugins-core
+
+sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+
+sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+
+sudo systemctl start docker
+
+sudo systemctl enable docker
+
+run docker commands now
+docker ps
+no output
+
+bydefault sudo user can only execute docker commands
+
+so add ec2-user to docker group
+sudo usermod -aG docker ec2-user
+logout and login again
+
+now run the docker commands
+docker ps
+
+
+docker commands
+===============
+command to see running containers
+docker ps 
+
+container are nothing but running version of image
+to see all running images
+docker images
+
+to pull the image from dockerhub or docker registry
+docker pull nginx
+login to docker registry 
+in this registry -- people from nginx will create one image & pushes that into registry
+nginx = OS + system packages + nginx software
+
+creates the containers, status is created
+docker create nginx:latest
+show id of container
+
+shows the containers which are in created status
+docker ps -a
+
+start the container
+docker start <container-id>
+docker ps -a
+status -- up
+
+to remove running container
+docker rm -f container-id
+
+to remove the docker image
+docker rmi nginx
+
+command to pull the image & create container & start the container
+docker run nginx
+
+
+
+

@@ -1,0 +1,252 @@
+databases -- mongodb , redis , MySQL , RabbitMQ -- contains end user data -- 
+we can place end user data in containers
+by placing end user data in containers ultimately the data will be stored in server only
+
+generally stateless applications will be placed in containers
+we will run stateful application  from vm's only
+
+but demand came -- to place the db's in containers -- so some people are placing db's in containers
+
+if server crashes -- it takes some time to mount & recover the data  -- if we place db's in containers
+
+logs & metrics (like cpu & monitoring) -- we can place these in containers
+
+1st preference -- don't keep stateful apps in containers
+if we want we can keep the data other than end users data in containers
+
+when image size is less -- application starts quickly & we can scale the applications fastly 
+
+if u run the latest images -- we can't know the version used in background
+
+by using single docker host for running the application -- is that server crashes -- application gets down -- no reliability 
+so we need to use multiple docker hosts -- host1 contains one network & host2 contains another networks -- communication between the hosts becomes difficult
+
+generally we use bridge network in docker host
+when we use multiple or two docker hosts , in each docker host we are running one container -- to provide the communication between those two containers we have to use overlay network
+docker cannot manage this overlay network , we should use some orchestration tool definitely
+
+why we use container orchestration ?
+to manage multiple servers -- there needs to be someone to provide the instruction 
+container orchestration tools -- docker swarm , k8s etc
+k8s setup is easy & management is difficult
+dokcer swarm -- autoscaling not available , storing secrets & managing volumess is difficult , networking is available but not perfect
+
+kuberetes setup
+===============
+1.from now we will use docker to build the images
+2. for running the images we use k8s
+
+steps
+=====
+1. Kubernetes needs manifest files -- we will write them in yaml 
+store dockerfiles & manifest files in git
+
+2. create one workstation or server & pull the dockerfiles & manifest files here
+build the images here & push those images to docker hub or ECR repo
+generally banking people don't push their images in docker hub due to security issues
+but ECR repo is related to cloud , there will be isolation in cloud 
+
+3. in workstation -- we need to install some client related softwares , 
+to communicate with EKS we need some client software that is kubectl , this EKS is a service from amazon & it creates nodes & we use this to connect with eks cluster
+next we need to install eksctl -- this is used to create cluster & manage the cluster, update or delete eks cluster
+(later we will create this eksctl by using terraform , don't use minikube)
+
+4.to provide the communication between kubectl & minikube -- we need some authentication -- for that use aws configure -- by default in aws cli will be available in all servers
+aws cli is used to provide authentication while creating cluster & used to connect with cluster
+
+
+create one ec2 server -- this is used as workstation
+use devops-practice ami
+no key-pair
+use default vpc
+default sg
+storage 50 GB
+
+
+connect to the server & extend the disk
+install the docker in it
+
+commands to install docker --
+sudo dnf -y install dnf-plugins-core
+sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
+sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin-y
+sudo systemctl enable --now docker
+sudo systemctl start docker
+sudo usermod -aG docker ec2-user
+
+eksctl is a command line tool to manage EKS
+search -- commands to install eksctl
+
+# for ARM systems, set ARCH to: `arm64`, `armv6` or `armv7`
+ARCH=amd64
+PLATFORM=$(uname -s)_$ARCH
+
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+
+# (Optional) Verify checksum -- optional
+curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+
+tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+
+sudo install -m 0755 /tmp/eksctl /usr/local/bin && rm /tmp/eksctl
+
+command to check eksctl version --
+eksctl version
+
+install kubectl
+curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.35.3/2026-04-08/bin/linux/amd64/kubectl
+
+chmod +x ./kubectl
+
+mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH
+
+command to check the version --
+kubectl version --client
+
+run aws configure 
+give access key & secrect access key & region name
+
+now we need to create the cluster -- for that we need to create some configuration
+search -- eksctl yaml file
+
+we will create node group(group of servers) by using EKS
+in yaml file we will mention -- api version , kind & metadata & node group
+in metadata we have to mention name of the cluster & region to create the cluster
+in node group mention -- name of the instance , instance type & capacity (how many instances we need)
+
+instead of node group we can create managed node group -- aws will manage these nodes completely
+here also we will mention name of nodes , size , instance type , capacity , max size (max instances) , az's , volume size etc
+
+we need large instances here
+when we use large instances -- cost increases -- for cost cutting use spot instances -- 
+
+consider aws has 1TB RAM , 200 TB HD
+40GB RAM , 80TB HD -- not in use
+aws provides 70-80% discount if we use these ..
+
+upto now , we have created on-demand instances
+on demand instances means whenever we ask aws provides resources
+
+when aws gets requests for on demand resources -- then aws take out these spot instances with 2minutes notice
+don't run production using spot instances 
+we use spot instances in dev & testing env's (temporary purpose) to save billing
+
+create one node group -- mention multiple instance types -- based on availability aws provides the instance 
+create 2 instances using node group
+
+so lets create spot instances
+create one repo -- eksctl
+open gitbash --
+clone the repo
+create one file -- eks.yaml
+
+eks.yaml
+========
+# spot-cluster.yaml
+
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: roboshop
+  region: us-east-1
+
+managedNodeGroups:
+- name: spot
+  instanceTypes: ["c3.large","c4.large","c5.large","c5d.large","c5n.large","c5a.large"]
+  # AWS Free tier
+  #instanceTypes: ["m7i-flex.large","c7i-flex.large","t3.small"]
+  spot: true
+  desiredCapacity: 2
+
+push the code to GitHub & pull to server 
+
+command to create cluster -- 
+eksctl create cluster --config-file=eks.yaml
+
+it uses aws configure in background to create cluster
+it takes 15 minutes to create cluster
+
+after creation of cluster command to see nodes --
+kubectl get nodes
+
+we can  trust cloud but we can't trust docker hub so don't place ur company images in docker hub
+
+Amazon EKS is master node , we can't ssh into this --  it will be managed by Kubernetes
+nodes contains components -- managed by AWS
+
+now lets discuss about 
+docker layers
+=============
+clone roboshop-docker repo & build the catalogue image --
+docker build -t catalogue:1.0.0 .
+
+how docker handles images ?
+it uses layering approach
+
+to see the layers while building the image , use command --
+DOCKER_BUILDKIT=0 docker build -t user:1.0.0 --rm=false --no-cache .
+
+when u give docker build 
+it take first instruction from this file -- 
+FROM node:20  -- create container from this image -- login to that intermediate container & runs 2nd instruction (i.e WORKDIR /app)
+ -- creates image by this -- runs container from this 
+runs next instruction COPY package.json . -- creates image from this -- runs container by this image -- runs next instructions in container -- like that it build the image
+
+docker  creates the intermediate containers & intermediate images by each & every instruction -- removes them
+it just stores the final image & container
+
+summary
+=======
+docker creates intermediate container for every instruction
+it will run next following instruction inside this container -> create image out of it
+then it creates another intermediate container from that image, run the next instruction -> create image out of it
+
+so for every instruction new layers are created -> docker exports all these layers into hub while pushing the image
+so for every instruction new layers are created -> docker exports all these layers into hub while pushing the image
+
+we must keep frequently changing instructions at the bottom of Dockerfile to make the build process fast and storage
+
+while writing docker file , code (js files) changes continuously , place those instructions at bottom
+place not frequently changing instructions at top (like WORKDIR , EXPOSE , ENV)
+
+make some changes in .js file (like write one comment in that file) & try to build the image again -- docker rebuilds the image from that js instruction & all above layers will be cached
+
+only changed layers will be pushed to docker hub
+
+docker core
+============
+
+consider that u have pulled node:20 image from docker & u changed the image name & u tried to push the image to the docker -- docker doesn't stores this image in docker hub & it just places reference to it
+
+
+in dockerfiles -- u have FROM repo --
+Dockerfile
+==========
+FROM redhat/ubi9
+
+clone this repo to server & build image from this & push to docker hub
+docker build -t layer-demo .
+docker login -u jujjurisowjanya
+docker tag layer-demo jujjurisowjanya/layer-demo
+
+now copy this from repo to another repo
+cp FROM test
+cd test
+docker build -t jujjurisowjanya/layer-test .
+docker push jujjurisowjanya/layer-test
+u can see mounted from jujjurisowjanya/layer-demo
+
+docker push jujjurisowjanya/layer-test
+u can see layer already exists
+
+
+
+
+
+
+
+
+
+
+

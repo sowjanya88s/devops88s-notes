@@ -1,0 +1,510 @@
+containers -- build & run the image
+
+docker architecture 
+====================
+1. docker checks image is available or not
+2. if available it will run
+3. if not available , it will pull from the hub
+4. creates container out of it
+5. sends the output to user
+
+
+docker daemon -- where we install docker
+docker client == docker command line
+docker client connects with docker daemon
+docker daemon == docker software running
+
+when we give ,
+docker run nginx -- docker daemon checks checks whether nginx is available in local or not
+if available it creates container out of it & shows to client
+if not available pulls form hub, store it in local , create container & shows to client
+
+create one server -- install docker & extend the volume of it
+docker compose up -d
+as images are not available in this server , so pulls the images from docker hub & creates containers out of it
+
+just building the images & running those is not enough
+we have to implement best practices while building & running the images
+
+volumes
+=======
+docker containers are ephemeral, if we delete the containers it will delete the data also
+if we place databases in container, data should not be deleted -- so we have to use volumes
+
+there are two types of volumes 
+1. un-named volumes
+2. named volumes
+
+run nginx container -- 
+docker run -d -p 80:80 nginx
+pulls the image from docker hub & creates the container
+
+now connect to nginx container --
+docker exec -it <container-id> bash
+cd /usr/share/nginx/html
+echo "hi" > hi.html
+
+open browser -- http://<public-ip-of-server>:80
+we can see hi there
+
+if we delete the container 
+docker rm -f 9c
+
+again we r creating nginx container --
+docker run -d -p 80:80 nginx
+we can't find the previously created data in this container
+
+docker exec -it <container-id> bash
+cd /usr/share/nginx/html
+we can't see any data here
+
+if we want to save the data even if the container is deleted -- we have to create volumes
+create one directory -- 
+mkdir nginx-data
+echo "<h1> Hi, from volumes<h1>" > index.html
+ls -l
+
+we r telling the container to take data from /home/ec2-user/nginx-data & place that in /usr/share/nginx/html & run the container --
+docker run -d -p 80:80 -v /home/ec2-user/nginx-data:/usr/share/nginx/html nginx
+
+open browser -- http://<public-ip-of-server>:80
+we can see Hi, from volumes there
+
+if we remove container -- it does not deletes the data -- because we have created the data in the host 
+
+create the container again -- we can see the output
+docker run -d -p 80:80 -v /home/ec2-user/nginx-data:/usr/share/nginx/html nginx
+
+this works as HD -- once u save the data , u can mount this data to another container using -v -- these are known as un-named volumes -- these are managed by us
+		
+2. named volumes -- use docker commands to create & manage the container volumes
+
+command to see options in docker volumes --
+docker volume
+commands 
+create  create a volume
+inspect  display detailed information on one or more volumes
+ls       list volumes
+prune	 remove unused volumes
+rm 	 remove one or more volumes
+
+command to create docker volumes --
+docker volume create nginx
+volume with name nginx will be created
+
+to see volumes created by docker --
+docker volume ls
+
+to know path of docker volumes --
+docker volume inspect nginx
+creates nginx volume in /var/lib/docker/volumes/nginx/_data
+
+command to create container with docker volume --
+docker run -d -p 80:80 -v nginx:/usr/share/nginx/html  nginx
+
+now to go the docker volume path
+sudo su -
+cd /var/lib/docker/volumes/nginx/_data
+nginx placed default content here
+
+echo "<h1> Hello from named volumes <h1>" > hello.html
+nginx places its data in /var/lib/docker/volumes/nginx/_data
+if we removed container -- data remains same
+
+docker ps
+docker rm -f <container-id>
+cd /var/lib/docker/volumes/nginx/_data
+ls -l
+we can see the data here
+
+we can create named volumes using docker compose also
+search -- docker compose volumes
+in roboshop project , we need to  create volumes for databases with db names
+we have to mount docker volumes with related db path
+open dockerhub -- search mongodb -- open official documentation -- find its data path (mongodb stores its data here) -- /data/db
+
+open dockerhub -- search redis -- open official documentation -- find its data path (redis stores its data here) -- /data
+
+open dockerhub -- search mysql -- open official documentation -- find its data path (mysql stores its data here) -- /var/lib/MySQL
+
+open dockerhub -- search rabbitmq -- open official documentation -- find its data path (rabbitmq stores its data here) -- /var/lib/RabbitMQ
+
+docker-compose.yaml
+===================
+services:
+  catalogue:
+    build: ./catalogue
+    image: joindevops/catalogue:1.0.0
+    container_name: catalogue
+    depends_on:
+    - mongodb
+  user:
+    build: ./user
+    image: joindevops/user:1.0.0
+    container_name: user
+    depends_on:
+    - redis
+    - mongodb
+  cart:
+    build: ./cart
+    image: joindevops/cart:1.0.0
+    container_name: cart
+    depends_on:
+    - redis
+    - catalogue
+  shipping:
+    build: ./shipping
+    image: joindevops/shipping:1.0.0
+    container_name: shipping
+    depends_on:
+    - mysql
+    - cart
+  payment:
+    build: ./payment
+    image: joindevops/payment:1.0.0
+    container_name: payment
+    environment:
+      CART_HOST: "cart"
+      CART_PORT: "8080"
+      USER_HOST: "user"
+      USER_PORT: "8080"
+      AMQP_HOST: "rabbitmq"
+      AMQP_USER: "roboshop"
+      AMQP_PASS: "roboshop123"
+    depends_on:
+    - rabbitmq
+    - cart
+    - user
+  frontend:
+    build: ./frontend
+    image: joindevops/frontend:1.0.0
+    container_name: frontend
+    ports:
+    - "80:80"
+    depends_on:
+    - catalogue
+    - user
+    - cart
+    - shipping
+    - payment
+  mongodb:
+    build: ./mongodb # it moves to mongodb directory
+    image: joindevops/mongodb:1.0.0 # docker build -t joindevops/mongodb:1.0.0
+    container_name: mongodb
+    volumes:
+    - mongodb:/data/db
+  redis:
+    image: redis:7.0
+    container_name: redis
+    volumes:
+    - redis:/data
+  mysql:
+    build: ./mysql
+    image: joindevops/mysql:1.0.0
+    container_name: mysql
+    volumes:
+    - mysql:/var/lib/mysql
+  rabbitmq:
+    image: rabbitmq:3
+    environment: 
+      RABBITMQ_DEFAULT_USER: roboshop
+      RABBITMQ_DEFAULT_PASS: roboshop123
+    container_name: rabbitmq
+    volumes:
+    - rabbitmq:/var/lib/rabbitmq
+networks:
+  default:
+    driver: bridge
+    name: roboshop
+    external: false # if true, you need to create network manually
+volumes:
+  mongodb: # docker volume create mongodb
+  redis:
+  mysql:
+  rabbitmq:
+
+
+connect to server 
+git clone <repo-url>
+
+docker compose up -d
+pulls images from docker hub & creates networks & creates containers
+
+docker images
+
+docker ps
+
+docker logs <name>
+
+open browser -- http://<public-ip-server>:80
+check functionality of website & by creating one account
+
+stop containers --
+docker compose down
+
+start --
+docker compose up -d
+now try to login with previously create user -- u can
+because we have created volumes -- so data will be saved
+
+no one places databases in containers -- always place databases in VM's only
+we can place frontend & backend (stateless) in containers
+we can use containers to save logs & monitoring data
+
+
+docker best practices
+=====================
+1. use minimal base images
+===========================
+lets optimize the base images of backend components
+lets check the size of nodejs image -- 
+docker pull node:20
+docker images -a
+node:20 -- size -- 1.58 GB
+after doing installation on it -- size increases -- 1.78 GB -- this is huge
+
+for minimal images -- use alpine images , use official images only
+docker pull alpine
+docker images -a
+alpine:latest size - 12.7 GB
+alpine is one of the Linux os
+
+node:20 is built on ubuntu/Debian , so its size is 1.58 GB
+goto docker hub -- node -- 20 -- check for alpine -- 
+
+open roboshop-docker -- catalogue --
+Dockerfile
+===========
+ FROM node:20.20.2-alpine3.23
+ this creates /app and move there
+ WORKDIR /app
+ COPY package.json .
+ COPY *.js .
+ RUN npm install
+ ENV MONGO="true" \
+     MONGO_URL="mongodb://mongodb:27017/catalogue"
+ CMD ["node", "server.js"]
+
+push this code to GitHub & pull to server
+build the catalogue image now --
+docker compose build catalogue
+docker images 
+catalogue -- size -- 344 MB
+docker compose up -d
+by this catalogue will be recreated
+
+open browser -- check catalogue functionality
+
+2. use multi-stage builds
+=========================
+multi stage builds have multiple FROM instructions, basically looks like multiple dockerfiles. one dockerfile is to provide the artifact. we can copy the artifact into runtime image
+
+node artifact = code + node_modules for ex: java = .jar files
+application which are built & compiled are called as artifacts
+
+when we give npm install 
+
+when u r installing dependancies there might be cache , dev related tools , etc are installed. they are not required for running into production
+
+we ultimately need node artifact = code + node_modules
+
+
+search -- docker multi stage build syntax
+builder contains code & node_modules
+so copy /app from builder to 2nd /app
+
+Dockerfile
+==========
+FROM node:20.20.2-alpine3.23 AS builder //build
+WORKDIR /app
+COPY package.json .
+COPY *.js .
+RUN npm install
+
+
+FROM node:20.20.2-alpine3.23 //runtime
+WORKDIR /app
+EXPOSE 8080
+COPY --from=builder /app /app 
+ENV MONGO="true" \
+    MONGO_URL="mongodb://mongodb:27017/catalogue"
+CMD ["node", "server.js"]
+
+copy the code in to github & pull to server
+docker compose build catalogue
+docker images
+image size reduced from 378 to 246MB
+
+docker compose up -d
+open browser -- check functionality of website
+
+there will be max 2 stages in multi stage Dockerfile
+its better to use the same base os image in build & runtime
+
+3. use docker ignore
+====================
+don't load  unnecessary files & folders
+when we give docker it loads everything
+
+for example we have db repo -- in shipping we don't need db
+but docker load it , by that build becomes late
+for that we can write docker ignore
+
+in shipping repo -- create .dockerignore file
+.dockerignore
+=============
+db
+
+
+4. don't run as root
+====================
+create one user & use that user to run the application for security purposes
+
+
+docker pull nginx
+
+mount root to /nginx-root
+docker run -d -p 8080:80 -v /:/nginx-root nginx
+
+docker exec -it <container-id> bash
+cd /nginx-root/
+ls -l
+here we can see all the directories in /
+if we run the container as root user -- they can mount entire server data with anything -- container can do anything -- very dangerous
+
+search -- alpine add user
+create roboshop user & add roboshop user to roboshop group & run /app directory with roboshop user
+
+catalogue -- Dockerfile
+========================
+FROM node:20.20.2-alpine3.23 AS builder
+WORKDIR /app
+COPY package.json .
+COPY *.js .
+RUN npm install
+
+
+FROM node:20.20.2-alpine3.23
+WORKDIR /app
+EXPOSE 8080
+COPY --from=builder /app /app 
+ENV MONGO="true" \
+    MONGO_URL="mongodb://mongodb:27017/catalogue"
+RUN addgroup -S roboshop && adduser -S roboshop -G roboshop
+RUN chown -R roboshop:roboshop /app
+USER roboshop
+CMD ["server.js", "node"]
+
+now rebuild the catalogue image & run container & check the functionality of the website
+docker compose build
+docker compose up -d
+docker exec -it <container-id> sh
+or 
+docker exec -it <container-id> bash
+ls -l
+we can see everything with roboshop user
+
+
+5. avoid using latest
+=====================
+we will not be sure which version is running in the background
+
+6. keep containers stateless 
+============================
+use volumes if containers are stateful , prefer stateless apps inside containers
+
+7. use environment variables properly
+=====================================
+use env variables at run time.. advantage is no need to rebuild the image
+
+8. reduce image size 
+====================
+we have did that by using minimal base os & multi stage builds
+
+9. health checks 
+================
+we will do this at k8s 
+
+10. scan images for vulnerabilies
+==================================
+we will do this at k8s
+
+11. limit container resources
+==============================
+container consumes the resources dynamically -- it can be less or more
+there is a chance it can consume full resources
+we will do this in k8s
+
+12. use CMD & ENTRYPOINT correctly
+==================================
+
+open catalogue -- Dockerfiles
+=============================
+remove CMD ["server.js", "node"]
+
+instead add below two lines --
+CMD["server.js"]
+ENTRYPOINT["node"]
+
+node is the command , server.js is the argument
+
+13.give version & tag images properly prefer semantic version
+
+14. optimize layers
+
+15.secrets management -- use secrets , don't hardcode credentials -- in k8s we will keep secrets inside ssm parameter store or secrets manager
+
+16. use	CI/CD integration -- we will do this k8s
+
+in interviews -- when they ask for recently implemented best practices -- tell them that some containers are running as root user & u made it run with application user , u have implemented multi-stage builds , u placed env variables at run time , implemented layer optimization , placed secrets in secret manager
+
+1.0.0 -- major-version . minor-version . patch-version
+this is called semantic versioning
+
+consider current android version -- 20 -- ha defects
+20.1 -- release publicly
+20.1.1 -- patch means -- version came for addressing defects
+
+
+disadvantages of docker
+=======================
+1. in one server we r running entire roboshop project , which is not safe -- u can't rely on single docker host
+2. if u run multiple hosts , there need to be some orchestrator
+3. consider catalogue is in oner server & cart is in another server -- container to container communication is difficult if we run in docker
+4. if catalogue gets more requests -- if there is load on application , there should be load balancing -- not available in docker
+5. auto scaling is not available
+6. networking -- if we placed one container in one server -- networking between containers is not possible
+7. we cannot store secrets in secret manager in docker
+8. if server crashes , volume with data is gone -- volume implementation is not good
+
+to address these disadvantages -- orchestration tools came -- they are docker swam , k8s , mesos etc
+
+in docker swam -- implementation is poor
+
+among these k8s is famous
+we have best implementation for auto scaling , load balancing , secrets mgmt , networking etc
+k8s is open source tool launched by google
+by this EKS(aws) , AKS(azure) , GKE(google) , openshift (redhat) released
+
+we r going to limit this docker for image building & for running the images -- we will use k8s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

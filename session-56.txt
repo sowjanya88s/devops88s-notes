@@ -1,0 +1,518 @@
+upto now, we r using docker hub to push the images
+later we use ECR to maintain images
+
+using eksctl yaml file we will create cluster
+master does not contains ssh access
+
+open aws console -- EKS -- we can see our cluster here -- open it -- in that we can see the information about the cluster
+
+in ec2 -- we can see 2 nodes -- each node will be assigned with multiple ip addresses
+
+lets see about the resources in cluster --
+this cluster contains one master node & worker nodes(group of ec2 servers)
+workloads will be in nodes
+
+command to see the nodes --
+kubectl get nodes
+
+everything is resource in k8s
+namespace -- its like VPC in AWS
+namespace -- an isolated space inside k8s cluster where we can create our project related resources , we can completely control them. it is like our project inside k8s
+
+in k8s cluster we can run multiple projects securely , k8s is PAAS (platform as a service)
+ 
+in k8s , we will always mention apiversion , kind -- means kind of resources we are creating
+
+k8s contains multiple resources , command to see resources --
+kubectl api-resources
+
+there will be two types of resources --
+1. name space level (like vpc level in AWS)
+2. cluster level (like R53 global level)
+
+in command output in namespaced field we can check whether the resource is name space level or global level
+
+there are resources categorized based on api version to make maintenance easy
+k8s official documentation -- Kubernetes.io
+
+namespaces -- In Kubernetes, namespaces provide a mechanism for isolating groups of resources within a single cluster. Names of resources need to be unique within a namespace, but not across namespaces. 
+
+commands to see namespaces --
+kubectl get namespace
+in output we can see kube-node-lease , kube-public , kube-system -- these namespaces are used to mange the cluster & these are used by administrators
+default is the namespace -- comes by default
+
+everything is a resource in k8s & we can create them using yaml file
+
+command to create namespace -- 
+kubectl create namespace <name>
+
+command to delete namespace -- 
+kubectl delete namespace <name>
+
+
+open GitHub -- create one repo -- k8s-resources
+in that create one yaml file to create namespace 
+
+in yaml file we will mention kind as namespace , in metadata mention name of the namespace we are going to create, in labels we can mention project details , we can mention multiple labels here
+
+01-namespace.yaml
+==============
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: roboshop
+  labels:
+    project: roboshop
+    environment: dev
+    purpose: poc
+
+push this code to git repo & pull to the workstation 
+
+cd k8-resources
+command to create namespace using script --
+kubectl apply -f 01-namespace.yaml
+
+to see all namespaces --
+kubectl get ns
+
+to see the detailed info about namespace --
+kubectl describe ns roboshop
+
+command to delete namespace using script --
+kubectl delete -f 01-namespace.yaml
+
+pod
+===
+pod is smallest deployable unit in k8s , it is like container but a pod can have multiple containers , containers inside pod share same network and storage
+
+search -- k8s pod
+
+here spec means specifications , in containers we have to mention name of the container & the image we r using to run this container & we can mention the port for the container but it is optional because by default all images opens some default port(for ex: nginx opens 80 port bydefault). in containers we can mention list of containers 
+
+02-pod.yaml
+============
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  namespace: roboshop
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+
+command to create pod by using above script --
+kubectl apply -f 02-pod.yaml
+
+command to see created pods information --
+kubectl get pods
+
+this pod will be created in default namespace because we did not mentioned namespace here
+
+command to see events happened in pod --
+kubectl describe pod nginx			
+
+master places this pod in any one of the nodes
+then node checks the yaml file 7 pulls the image from docker hub
+& creates the container & start the container
+
+command to see ip address of the pod & in which node it was created --
+kubectl get pods -o wide
+
+these yaml files are called as manifest files
+
+command to delete the pods --
+kubectl delete -f 02-pod.yaml
+
+
+we can create multiple containers in one pod , we have to mention the namespace in metadata
+
+03-multi-conatiner.yaml
+=======================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: multi-container
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  - name: almalinux
+    image: almalinux:9
+    command: ["sleep", "1000"]
+
+commands to create containers in roboshop namespace --
+kubectl create namespace roboshop
+kubectl apply -f 03-multi-conatiner.yaml
+
+by default it checks in default namespace --
+kubectl get pods -o wide
+
+check pods availability in roobshop namespace --
+kubectl get pods -o wide -n roboshop
+
+EKS cluster contains -- nodes contains -- namespace contains -- pods
+
+command to check pods created or not --
+kubectl get pods
+
+u can see only one container is created 
+to check what is happened --
+kubectl describe pod multi-container
+nginx is pulled , created & started but almalinux is pulled , created but backoff failed restarting container almalinux
+
+in nginx there will be a command -- nginx -g daemon-off -- this keeps nginx container busy
+but in almalinux there is no such command to keep the container busy , so give some command to start the container
+
+pull the changes from git & now apply the script again
+some times some commands does not applies while the containers are running , in that case delete the containers & apply it again
+
+kubectl delete -f 03-multi-conatiner.yaml
+
+kubectl apply -f 03-multi-conatiner.yaml
+
+kubectl get pods
+
+we can see 2 pods running now --
+kubectl describe pod multi-container
+
+now login to nginx
+kubectl exec -it multi-container -c nginx -- bash
+
+curl http://localhost -- we can see the nginx welcome page
+
+kubectl exec -it multi-container -c almalinux -- bash
+
+curl http://localhost -- here also u can see nginx welcome page
+because it shares the same network
+
+if u have created one container in roboshop namespace & command to login to it --
+kubectl exec -it nginx -n roboshop -- bash
+
+pods generates nginx logs continuously 
+until the pod lives we can check logs
+but we need logs for analyzing , so to save the logs in pod is not safe
+we have some log storage -- i.e ELK(elastic log stash kibana)-- push the logs here
+nginx responsibility is to serve the response
+we have sidecar containers -- these containers shares the same network & storage -- this takes the logs from /var/log/nginx & pushes these logs to ELK
+this is the reason k8s provided multiple containers option
+
+Kubernetes pods labels
+=======================
+labels add metadata to the resource , labels are selectors inside k8s
+by using selectors we can attach 2 resources based on labels
+
+04-labels.yaml
+==============
+apiVersion: v1
+kind: Pod
+metadata:
+  name: labels
+  #namespace: roboshop
+  labels:
+    project: roboshop
+    component: frontend
+    environment: dev
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+
+push this code to git & pull to server
+
+kubectl apply -f 04-labels.yaml
+
+kubectl get pods
+
+kubectl describe pod labels -n roboshop 
+
+errors
+=======
+crash loop back off -- when container is not able to start
+image pull back off -- when ur node is not able to pull the image.. image address may be wrong or authentication problems
+							     
+annotations
+===========
+annotations are again like labels adds metadata, but annotations are used to select external resources (for example load balancers) 
+annotations allows special characters
+
+labels have limitations in key value length and size , special characters are not allowed inside labels
+
+05-annotations.yaml
+===================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: annotations
+  labels:
+    project: roboshop
+    component: frontend
+    environment: dev
+  annotations:
+    imageregistry: "https://hub.docker.com/"
+    jenkinsURL: "https://jenkins.joindevops.com/build/job/roboshop/34"
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+
+commands --
+kubectl create -f 05-annotations.yaml
+kubectl describe pod annotations
+resources
+=========
+containers consumes the resources from node according to its needs
+
+consider a node contains two pods , pod1 has one problem so it started consuming all resources of node , in this case pod2 does not have resources -- problem comes here
+we need to always restrict the resources to the pod .. if it gets more requests we can do autoscaling
+
+here also we will start the pod with minimum resources & we will scale them upto maximum level. we will mention resource units.
+ 
+search -- k8s pod resources
+1cpu = 1000 milli
+
+in soft link -- requests -- we will mention minimum limits of memory (RAM) & cpu (disk)
+100 mi - 1/10 th of 1 cpu
+in hard link -- limits -- we will mention maximum limits of memory (RAM) & cpu (disk) -- container can't extend its resource beyond this limits
+in projects we have to mentioning this mandatory
+to prove this practically we need to apply some stress
+
+06-resources.yaml
+=================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resources-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    resources:
+      # soft limit
+      requests:
+        memory: "64Mi" # RAM
+        cpu: "100m" # CPU
+      # hard limit
+      limits:
+        memory: "128Mi" # RAM
+        cpu: "150m" # CPU
+
+kubectl apply -f 06-resources.yaml
+kubectl get pods
+
+env
+===
+env variables useful for pod. in env we can mention key value pairs.
+
+
+07-env.yaml
+===========
+apiVersion: v1
+kind: Pod
+metadata:
+  name: env-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    env:
+    - name: project
+      value: roboshop
+    - name: course
+      value: Kubernetes
+
+kubectl apply -f 07-env.yaml
+
+kubectl describe pod env-demo
+in output u can see env variables
+
+kubectl exec -it env-demo -- bash
+env
+in output we can see env here also
+
+what if we have 50 key-value pairs in env section , the pod env section becomes lengthy & not readable , if anything changes we have to change the pod definition & we habe to restart the pod again
+for that we can use configmap 
+
+configmap
+=========
+You can write a Pod spec that refers to a ConfigMap and configures the container(s) in that Pod based on the data in the ConfigMap. The Pod and the ConfigMap must be in the same namespace.
+we can mention key value pairs , we can mention one key & multiple values in this
+
+08-configmap.yaml
+==================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  course: "kubernetes"
+  duration: "15hr"
+  trainer: "sivakumar reddy"
+
+commands --
+kubectl apply -f 08-configmap.yaml
+kubectl get cm
+kubectl describe cm nginx-config
+
+now lets see attaching this config map to pod
+refer config map from pod using envfrom & configMapRef
+mention name of config map here
+
+09-pod-configmap.yaml
+======================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    envFrom:
+    - configMapRef:
+        name: nginx-config
+
+commands --
+kubectl apply -f 09-pod-configmap.yaml
+kubectl exec -it pod-configmap-demo -- bash
+env
+u can see configmap data here
+
+two types of data 
+we will place non confidential data in configmap
+we will place confidential data in secrets
+
+secrets
+========
+we will mention encrypted data here
+
+echo "admin" | base64 
+we can see encrypted value in output
+echo <encoded-value> | base64 --decode
+we can see decrypted value in output
+
+anyone can decrypt the data using base64 
+secret means real encoding , we will use secret manager
+
+10-secrets.yaml
+===============
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nginx-secret
+data:
+  username: "YWRtaW4K"
+  password: "YWRtaW4xMgo="
+
+kubectl apply -f 10-secrets.yaml
+
+now we have to bind this secret to pod
+
+11-pod-secret.yaml
+===================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-secret-demo
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    envFrom:
+    - secretRef:
+        name: nginx-secret
+
+while binding , k8s decode & binds
+
+commands --
+kubectl apply -f 11-pod-secret.yaml
+kubectl exec -it pod-secret-demo -- bash
+env
+we can see decoded secrets here
+
+service
+========
+consider that we have 2 pods , how can they communicate with each other , they can communicate using ip addresses but they are temporary
+so we can use k8s service to achieve
+1. pod to pod communication through DNS, service name works as DNS here
+2. load balancing
+
+consider cart tries to reach -- catalogue
+if we have multiple (cart) resources we should always use load balancer
+pod1 can contact pod2 through service
+pod1 -- service -- pod2 , pod3 , pod4
+based on round robbin way -- service allocates anyone pod to connect with pod1
+
+we have multiple types of services
+1. cluster ip
+2. node port
+3. load balancer
+
+lets see cluster ip now
+
+cluster ip
+===========
+in this method , we have to mention spec , here mention selectors , give labels (labels are used as selectors) , to which pod we want to attach the service , mention that pod related labels here
+
+by this service will be created & finds pod with mentioned labels & attaches that pod to its team
+mention port info of pod & container port
+make sure that particular pod is running in same namespace
+
+12-service.yaml
+================
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    component: frontend
+    environment: dev
+  ports:
+  - protocol: TCP
+    port: 80 # servie port
+    targetPort: 80 # container port
+
+commands --
+kubectl apply -f 12-service.yaml
+kubectl get svc
+kubectl describe svc nginx
+we can see end points -- nothing but pods it connected to & port
+
+lets create one pod using below code --
+13-service-test.yaml
+====================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: svc-test
+spec:
+  containers:
+  - name: almalinux
+    image: almalinux:9
+    command: ["sleep", "1000"]
+
+commands --
+kubectl apply -f 13-service-test.yaml
+kubectl exec -it service-test -- bash
+curl nginx
+
+
+service-test -- pod & labels -- pod
+how service-test reaches labels -- through service -- use service name as dns
+
+service is compulsory to provide pod-to-pod communication
+
+
+
+
+
+
+
+
+
+
+ 

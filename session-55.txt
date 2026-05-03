@@ -240,6 +240,13 @@ u can see mounted from jujjurisowjanya/layer-demo
 docker push jujjurisowjanya/layer-test
 u can see layer already exists
 
+part2
+======
+if we want to implement k8s in on-premise -- we have to take the support from openshift
+for every command while building the image -- docker caluclates the check sum id if it is changed new layer will be created
+images will be compared from ur docker repo only
+by running the docker container by using other user -- we can mount the root disk but we can't access those files with other users
+
 
 
 

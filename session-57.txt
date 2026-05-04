@@ -1,0 +1,357 @@
+steps in containerization --
+1. Build the image
+2. Run the image
+
+we r running the images in k8s
+Namespace -> isolated project space where we create our project resources
+Pod -> smallest deployable unit in kubernetes, pod contains multiple containers. every container share same network and storage
+Labels -> adds metadata to the pods, labels are selectors. we can attach labels to any resource in k8s
+env -> can pass env variables to the containers
+resources -> we need to restrict pod resources. request and limits soft limit and hard limit
+annotations -> again  adds metadata, but used to select external resources like load balancers, IAM roles, etc
+config map -> configuration resource, we can attach config map to the pod
+secrets -> confidential information, can attach to pod environment, but only encoded information not encrypted
+services
+1. pod to pod communication since pod ip is ephemeral. we can communicate with service name
+2. load balancing between pods
+3. service select pods based on labels as selectors
+
+load balancing between pods
+===========================
+communication between two pods -- at first pod -- service name & service port is configured 
+at service -- pod 2 , pod3 , pod4 will be registered this service acts like load balancer
+service performs health check & forwards request to pods
+this is also called as registry or service mesh in registry
+registry -- when a new pod comes , pod contains labels , this pod registers itself in registry of service
+by this from next request service sends the traffic to this newly added pod too
+
+pod1 -- service -- pod2 , pod3 , pod4
+
+when pod3 wants to reach to pod1 , pod3 should send request request to service related to pod1
+
+pod3 -- service -- pod1
+
+pod to pod communication happens only through service
+
+service creation -- 3 methods
+1. cluster ip -> internally exposing pod with in the cluster -- discussed yesterday
+while creating service -- bydefault cluster ip will be created
+
+to expose the pod to outside world use 2 methods below
+2. node port -> cluster ip is subset of nodeport.. every node inside eks cluster open the nodeport. 30000–32767
+3. load balancer -> node port is subset of load balancer. it will create a classic load balancer
+
+create nginx pod using 04-labels.yaml
+
+nodeport
+========
+used to expose the pod to outside world. cluster ip is subset of nodeport. every node inside eks cluster opens node port
+
+search -- k8s service nodeport
+if we mention type as nodeport -- nodeport will be created
+
+if we don't mention port -- 
+cluster ip will be created for nodeport & a new port will be opened 
+
+open this new port in nodes sg
+for example consider we have 2 nodes in cluster -- open that port in nodes
+select any node -- sg -- edit inbound rules -- custom tcp -- 32141 -- anywhere -- 0.0.0.0/0 -- save
+now take the public ip of 2 nodes -- open browser -- http://<public-ip>:32141
+u can see nginx welcome page
+k8s opens port in all worker nodes & when we send request to anyone of the worker nodes that request will be forwarded to cluster ip service & from that service file request goes to the pod
+
+k8s modifies internal networking rules , when request comes to instance -- that will be forwarded to service -- that will be forwarded to end point
+
+we can mention the port for node port , if we did not mention port in service file , it gives random port number from ephemeral port range
+we have to add the ports in inbound rules of sg
+
+14-service-nodeport.yaml
+========================
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-np
+spec:
+  type: NodePort
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    component: frontend
+    environment: dev
+  ports:
+  - protocol: TCP
+    port: 80 # servie port
+    targetPort: 80 # container port
+    nodePort: 32141
+
+push the above code to GitHub & pull to the server
+
+kubectl apply -f 14-service-nodeport.yaml
+
+kubectl get svc
+we can see service with name nginx-np
+
+kubectl get pods -o wide
+this pod will be created in any one node
+
+exposing like this to outside world is not correct & not secure 
+furtherly we will create cluster in private subnet -- we will disable public ip , so to expose properly to outside world -- we have another type called load balancer
+
+load balancer 
+==============
+node port is subset of load balancer. it will create a classic load balancer
+
+for this mention service type as load balancer -- by this we can get an extra thing called load balancer & node port & cluster ip will be opened
+
+now requests flow -- classic load balancer will be created -- from this requests goes to worker nodes -- service -- pod
+
+in worker nodes sg -- u can find load balancer sg id -- which means two nodes will accept traffic from load balancer
+
+we will create r53 using load balancer dns name
+
+goto load balancers section -- u can see 2 worker nodes in target instances -- health checks related to them 
+
+in inbound rules of sg -- we can see sg-id of load balancer -- this will be managed by aws automatically
+
+open browser -- give LB dns name -- u can see nginx welcome page
+
+15-svc-lb.yaml
+===============
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-lb
+spec:
+  type: LoadBalancer
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    component: frontend
+    environment: dev
+  ports:
+  - protocol: TCP
+    port: 80 # servie port
+    targetPort: 80 # container port
+    nodePort: 32141
+
+push this code to GitHub & pull to server
+kubectl create -f 15-svc-lb.yaml
+kubectl get svc
+
+in later stages we use application LB -- this forwards the load to target instances -- here it is called as ingress controller -- we will discuss about this in later stages
+
+workloads will be created in worker nodes only , not in master
+
+next topic is -- 
+
+Sets
+=====
+1. ReplicaSet
+2. Deployment
+3. DaemonSet
+4. StatefulSet
+
+how o create multiple pods ?
+
+Replicaset
+==========
+-> create multiple replicas of your pod. its responsibility is to always run desired no.of pods
+search -- create replica set
+in spec -- replicas -- mention the no.of pods u wan to create
+in template -- metadata -- mention pod definition
+replicaset matches the pods with labels mentioned in it -- considers them as its pods
+labels plays important role in k8s
+mention multiple labels for uniqueness
+we can't mention pod name in replica set
+by mentioning kind as replica set , we should mention pod definition in it
+here pod name will be --  <replica-set-name>-<random-5-chars>
+
+16-replicaset.yaml
+==================
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    purpose: rs-demo
+    tier: frontend
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      purpose: rs-demo
+      tier: frontend
+      component: frontend
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        purpose: rs-demo
+        tier: frontend
+        component: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        #image: nginx:stable-alpine3.23-perl
+
+push this code to git & pull to server
+kubectl create -f 16-replicaset.yaml
+kubectl get pods
+kubectl get rs
+
+kubectl delete nginx-<id>
+if delete one pod & replica set automatically creates another new pod in that place
+kubectl get pods
+
+command to edit in server --
+kubectl edit rs nginx
+
+here in k8s , management is a bit difficult & but we can scale pods fastly
+
+now change the version of nginx in replica set & apply the config again
+git pull
+kubectl apply -f 16-replica-set.yaml
+kubectl get pods
+kubectl describe rs nginx
+we can see the previously created pod only
+
+replicaset does not cares version changes , its responsibility is to always run desired no.of pods
+
+
+deployment/release
+==================
+general meaning of deployment -- you have v1 running, v2 is ready
+steps -- 
+1. stop the application server or component. systemctl stop catalogue
+2. remove the v1 code
+3. download v2 code
+4. restart catalogue. systemctl restart catalogue
+ 
+since pods are immutable, we can create another set of v2 pods, then delete v1 pods
+
+search -- deployments
+in kind mention name deployment
+
+by using given config , it created nginx  deployment first , by that one replica set will be created & from that pods will be created 
+
+
+17-deployment.yaml
+===================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    purpose: rs-demo
+    tier: frontend
+    component: frontend
+  annotations:
+    kubernetes.io/change-cause: "moving to 1.29.7"
+spec:
+  replicas: 2
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      purpose: rs-demo
+      tier: frontend
+      component: frontend
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        purpose: rs-demo
+        tier: frontend
+        component: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29.7
+        #image: nginx:latest
+
+
+push the above code to git & pull to the server
+kubectl create -f 17-deployment.yaml
+kubectl get pods
+kubectl get rs
+kubectl get deployment
+
+now change the version of nginx , pull the code to the server again 
+kubectl apply -f 17-deployment.yaml
+kubectl get pods
+kubectl get rs
+kubectl get deployment
+
+u can see another replica set will be created & along with pods
+old pods will be deleted gradually but u can see old replica set
+
+why old replica set still exists?
+search -- k8s deployment commands
+consider  that new version of code has defects , now we have to rollback to previous version -- otherwise business get down
+
+command to see revisions --
+kubectl rollout history deployment/nginx
+we can see 2 revisions here ( 1st -- nginx , 2nd -- nginx:1.29.7 )
+
+to go to previous version --
+kubectl rollout undo deployment/nginx
+kubectl get pods
+kubectl describe pod <pod-name>
+check version of nginx here -- nginx:1.29.7 -- previous version
+
+here k8s , saves replica sets definitions
+by this we can goto any versions
+
+search -- kubectl deployment change cause set
+
+command to check rollout status --
+kubectl rollout status deployment/nginx
+
+we can mention change cause message in annotation of config
+apply the config again 
+kubectl apply -f 17-deploymen.yaml
+kubectl rollout status deployment/nginx
+kubectl rollout history deployment/nginx
+
+by mentioning change cause -- we can easily identify to which version we have to rollback
+
+now change the version of nginx as 1.29.7
+git pull 
+kubectl apply -f 17-deploymen.yaml
+kubectl get pods
+kubectl describe pod <pod-name>
+we can see 1.29.7 version here
+kubectl rollout status deployment/nginx
+kubectl rollout history deployment/nginx
+
+now defect came , do roll back
+kubectl rollout undo deployment/nginx
+kubectl rollout history deployment/nginx
+
+pod is subset of replica set , replica set is subset of deployment
+create deployment -- it creates replica set -- it creates pods
+
+in project we use deployment only even if we want single replica -- because management becomes easy
+
+							-- 1:10 mins
+
+
+
+
+
+
+
+
+
+
+

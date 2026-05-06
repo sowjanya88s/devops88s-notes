@@ -343,7 +343,216 @@ create deployment -- it creates replica set -- it creates pods
 
 in project we use deployment only even if we want single replica -- because management becomes easy
 
-							-- 1:10 mins
+							
+by using all these resources we can create our roboshop project
+create one repo in GitHub -- k8-roboshop
+clone it to local
+open it -- k8-roboshop -- mongodb --
+create roboshop namespace & mention the same namespace in mongodb also
+
+namespace.yaml
+==============
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: roboshop
+  labels:
+    project: roboshop
+    environment: dev
+    purpose: poc
+
+we have to create replicaset for every component , pull the image mongodb:1.0.0 from docker hub , 
+give three hiphens and write separate resource definition here , create service for mongodb , cluster ip for mongodb because we don't expose mongodb to outside world , mention port number as 27017 for service port & container port
+write labels for mongodb
+
+
+manifest.yaml
+==============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: mongodb
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: joindevops/mongodb:1.0.0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: db
+    component: mongodb
+  ports:
+  - protocol: TCP
+    port: 27017 # servie port
+    targetPort: 27017 # container port
+
+
+commands --
+cd k8-roboshop
+kubectl apply -f namespace.yaml
+cd mongodb 
+kubectl apply -f manifest.yaml
+kubectl get deployment -n roboshop
+kubectl get rs -n roboshop
+kubectl get pods -o wide -n roboshop
+kubectl get svc -n roboshop
+kubectl describe svc mongodb -n roboshop 
+
+now lets see catalogue
+create repo -- catalogue
+give labels
+use image name as catalogue:1.0.0 it pushes from docker hub
+mention catalogue port as 8080 (container port & service port)
+we have to give mongodb env to catalogue give it at run time
+create config map used to map mongodb 
+mention service name as mongodb
+refer this config map at replica set
+
+
+manifest.yaml
+=============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+data:
+  MONGO: "true"
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: catalogue
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: catalogue
+    spec:
+      containers:
+      - name: catalogue
+        image: joindevops/catalogue:1.4.0
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: catalogue
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: catalogue
+  ports:
+  - protocol: TCP
+    port: 8080 # servie port
+    targetPort: 8080 # container port
+
+
+commands --
+git pull
+cd catalogue
+kubectl apply -f manifest.yaml
+kubectl get pods -n roboshop
+kubectl get rs -n roboshop
+kubectl exec -it <catalogue-pod-name> -n roboshop -- bash
+curl http://localhost:8080/health
+we can see catalogue can reach mongodb
+
+ 
+
+
+
+
+
+
+
+
+
 
 
 

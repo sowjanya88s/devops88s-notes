@@ -1,0 +1,834 @@
+1. build the image in docker 
+2. run the image using k8s
+after scheduling k8s in node , node will pull the images from docker hub , using manifest file it will understand how to run the image
+manifest file contains details about no.of replicas needed , config map etc
+
+yesterday we have created mongodb & catalogue
+we have to add resources to the containers
+configuring health checks is one of the best practices
+these are called as probes -- liveness , readiness , startup probes
+liveness -- checking whether the pod is healthy or not
+for every 5 sec , check if the pod is not healthy then we have to restart the pods
+
+readiness -- whether ur pod is ready to accept the traffic or not
+usually application take some time to start/get ready
+
+startup probe -- usually java apps or high memory apps take some more time to start , protect slow starting containers with startup probes
+
+start up --> readiness --> liveness
+for nodejs & python applications readiness is enough
+
+in liveness probe ,  by using tcp socket we can check whether a port is opened or not
+1. if port is opened then app is running
+2. /health is giving response then app is running
+
+example:
+ 
+livenessProbe:
+      exec:
+        command:
+        - cat
+        - /tmp/healthy
+      initialDelaySeconds: 5
+      periodSeconds: 5
+
+readinessProbe:
+      tcpSocket:
+        port: 8080
+      initialDelaySeconds: 15
+      periodSeconds: 10
+
+startupProbe:
+  httpGet:
+    path: /healthz
+    port: liveness-port
+  failureThreshold: 3
+  periodSeconds: 10
+
+update health checks in catalogue manifest file
+initially wait for 15 sec for starting the application , perform health checks for every 10 sec , if 2 health checks are failed consider the pod is failed , and then restart the pod
+once container is ready , we have to check liveness probe , don't mention initial delay here , mention tcp socket here to check port is opened or not
+performing health check is mandatory for bet practices
+mention resources (i.e cpu & memory and their max & min limits ) for catalogue 
+
+now create namespace roboshop
+
+create mongodb --
+git clone <https-url-of-k8s-roboshop>
+
+cd k8s-roboshop
+kubectl apply -f mongodb/manifest.yaml
+kubectl get pods -n roboshop
+u can see mongodb container is created
+
+kubectl apply -f catalogue/manifest.yaml
+kubectl get pods -n roboshop
+u can see catalogue container is created
+
+instead of giving roboshop namespace in every command we can use kubens
+we can select the namespace initially 
+
+search google -- kubens install
+
+git clone https://github.com/ahmetb/kubectx.git ~/.kubectx
+export PATH=~/.kubectx:$PATH
+source ~/.bashrc
+
+mkdir -p ~/.bash_completion.d
+
+ln -sf ~/.kubectx/completion/kubens.bash ~/.bash_completion.d/kubens
+ln -sf ~/.kubectx/completion/kubectx.bash ~/.bash_completion.d/kubectx
+
+for f in ~/.bash_completion.d/*; do source $f; done
+source ~/.bashrc
+
+/home/ec2-user/.kubectx: -> current user commands
+/usr/local/sbin:
+/usr/local/bin: -> local user
+/usr/sbin: -> for all users system commands
+/usr/bin: -> for all users
+/sbin:
+/bin
+
+verify kubens installation --
+kubens
+setting roboshop namespace
+kubens roboshop
+kubectl get pods 
+shows all pods in roboshop namespace
+
+coammnd to set default namespace
+kubens default
+
+there is one more tool k9 -- it shows user interface
+run below command to install it -- 
+curl -sS https://webinstall.dev/k9s | bash
+
+open another tab enter k9s -- we can see visualization
+press l -- u can see logs
+esc -- back
+s -- shell
+exit -- comes out
+Shift+: -- deployment -- to see deployment
+Shift+: -- namespace -- to see namespace
+
+lets see redis config --
+for redis we have not build docker image
+we have to pull the image from docker hub
+create redis repo --
+
+manifest.yaml
+==============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: db
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: redis
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.0
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: redis
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: db
+    component: redis
+  ports:
+  - protocol: TCP
+    port: 6379 # servie port
+    targetPort: 6379 # container port
+
+
+commands --
+kubectl apply -f redis/manifest.yaml
+
+lets optimize our docker images & later we will give these images to k8s for running the images
+here optimizing the images means building the images at multiple layers & running the containers with roboshop user
+after optimizing the images , give its version as 1.4.0
+
+in previous classes we have optimized the catalogue image
+next we will see catalogue
+lets optimize the catalogue image
+open roboshop-docker -- catalogue -- 
+Dockerfile
+==========
+FROM node:20.20.2-alpine3.23 AS builder
+WORKDIR /app
+COPY package.json .
+COPY *.js .
+RUN npm install
+
+
+FROM node:20.20.2-alpine3.23
+WORKDIR /app
+EXPOSE 8080
+COPY --from=builder /app /app 
+# This env is going to be handled in configmap in k8
+ #ENV MONGO="true" \
+    #MONGO_URL="mongodb://mongodb:27017/catalogue"
+RUN addgroup -S roboshop && adduser -S roboshop -G roboshop
+RUN chown -R roboshop:roboshop /app
+USER roboshop
+CMD ["server.js"]
+ENTRYPOINT ["node"]
+
+now rebuild its image --
+docker build -t joindevops/catalogue:1.4.0 .
+
+now push the image to docker hub
+docker login -u jujjurisowjanya
+
+docker push jujjurisowjanya/catalogue:1.4.0
+
+mention this image name in catalogue manifest file
+
+there is one more important parameter in k8s -- i.e image pull policy
+node pulls the image & consider some problem came -- then we made some changes in the image & pushed the image to docker hub & then we deleted the catalogue pod & recreated the catalogue -- there will be no changes
+because in imagepullpolicy -- supported policies -- if not present -- the image is only pulled if it does not already exist on the node , this is the most common policy for production to save bandwidth & speed up startup
+so while rebuilding the image change its version
+
+while doing development -- when some issue comes -- we will resolve those issues & we will push the changes with same version until we get success
+for this we have to mention imagepullpoicy as always 
+always -- the kubelet always queries the registry to resolve the image name to a digest , if the local image digest matches the one in the registry , it uses the cached version ; otherwise , it pulls the new image
+
+for ex:
+imagepullplicy: Always
+
+by this even the image is available , it pulls the image from docker hub
+
+catalogue -- manifest.yaml
+==========================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+data:
+  MONGO: "true"
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: catalogue
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: catalogue
+    spec:
+      containers:
+      - name: catalogue
+        image: joindevops/catalogue:1.4.0
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: catalogue
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: catalogue
+  ports:
+  - protocol: TCP
+    port: 8080 # servie port
+    targetPort: 8080 # container port
+
+commands --
+git pull
+kubectl apply -f catalogue/manifest.yaml
+
+check in k9s -- old catalogue pod will be deleted & with new version catalogue will be created
+press s -- we will be launched in /app
+in normal user -- can we check whether catalogue is able to connect mongodb or not or can we install anything? no
+
+so we will create one debug pod
+firstly we have to create image for debug 
+for debug -- pull almalinux 9 image & install telnet & ping (iputils) & netstat (net-tools) & debugging commands (bind-utils)
+open roboshop-docker -- create debug repo -- 
+
+Dockerfile
+==========
+FROM almalinux:9
+RUN dnf install telnet iputils net-tools bind-utils -y
+CMD ["sleep", "2000"] # to keep container running
+
+push this code to GitHub & pull to server & build the image
+cd roboshop-docker
+git pull
+cd debug
+docker build -t jujjurisowjanya/debug:1.4.0 .
+docker push jujjurisowjanya/debug:1.4.0
+
+now open k8s-roboshop -- create debug repo --
+manifest.yaml
+=============
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug
+  namespace: roboshop
+spec:
+  containers:
+  - name: debug
+    image: joindevops/debug:1.4.0
+
+commands --
+cd k8-roboshop
+kubectl apply -f debug/manifest.yaml
+
+debug & catalogue are in the same roboshop namespace
+if debug is able to connect mongodb then catalogue can connect to mongodb
+select debug -- press s --
+telnet mongodb 27017
+we can connect to mongodb
+like this we will debug 
+
+telnet redis 6379
+we can connect to redis
+ctrl+] to come out
+
+next we will see cart
+lets optimize the cart image
+open roboshop-docker -- cart -- 
+Dockerfile
+==========
+FROM node:20.20.2-alpine3.23 AS builder
+WORKDIR /app
+COPY package.json .
+COPY *.js .
+RUN npm install
+
+
+FROM node:20.20.2-alpine3.23
+WORKDIR /app
+EXPOSE 8080
+COPY --from=builder /app /app 
+# This env is going to be handled in configmap in k8
+# ENV MONGO="true" \
+#     MONGO_URL="mongodb://mongodb:27017/catalogue"
+RUN addgroup -S roboshop && adduser -S roboshop -G roboshop
+RUN chown -R roboshop:roboshop /app
+USER roboshop
+CMD ["server.js"]
+ENTRYPOINT ["node"]
+
+commands --
+cd roboshop-docker/cart
+docker build -t jujjurisowjanya/cart:1.4.0 .
+docker push jujjurisowjanya/cart:1.4.0
+
+write config commands -- check cart documentation
+lets config cart container using k8s
+k8-roboshop -- create cart repo --
+manifest.yaml
+=============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cart
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: cart
+data:
+  REDIS_HOST: "redis"
+  CATALOGUE_HOST: "catalogue"
+  CATALOGUE_PORT: "8080"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: cart
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: cart
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: cart
+    spec:
+      containers:
+      - name: cart
+        image: joindevops/cart:1.4.0
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: cart
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cart
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: cart
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: cart
+  ports:
+  - protocol: TCP
+    port: 8080 # service port
+    targetPort: 8080 # container port
+
+
+commands --
+push this code GitHub & pull to server
+cd k8-roboshop/cart
+kubectl apply -f manifest.yaml
+press d -- we can see error description
+
+check in k9s -- we can see cart container
+now goto bebug -- press s 
+curl http://cart:8080/health
+u can see cart is running
+
+now lets build user optimized image
+open roboshop-docker -- user --
+Dockerfile
+===========
+FROM node:20.20.2-alpine3.23 AS builder
+WORKDIR /app
+COPY package.json .
+COPY *.js .
+RUN npm install
+
+
+FROM node:20.20.2-alpine3.23
+WORKDIR /app
+EXPOSE 8080
+COPY --from=builder /app /app 
+# This env is going to be handled in configmap in k8
+# ENV MONGO="true" \
+#     MONGO_URL="mongodb://mongodb:27017/catalogue"
+RUN addgroup -S roboshop && adduser -S roboshop -G roboshop
+RUN chown -R roboshop:roboshop /app
+USER roboshop
+CMD ["server.js"]
+ENTRYPOINT ["node"]
+
+push this to GitHub & pull to server
+cd roboshop-docker/user
+docker build -t jujjurisowjanya/user:1.4.0 .
+docker push jujjurisowjanya/user:1.4.0
+
+building image = image develope -> build -> push to hub
+image not pulled successfully -- image pull backoff error
+running the image = image pull and then run the image using manifest config
+image is not running successfully -- crash loop backoff
+
+write config commands -- check user documentation
+lets create manifest file for user
+open k8-roboshop -- create user repo ---
+manifest.yaml
+==============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: user
+data:
+  REDIS_URL: "redis://redis:6379"
+  MONGO_URL: "mongodb://mongodb:27017/users"
+  MONGO: "true"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: user
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: user
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: user
+    spec:
+      containers:
+      - name: user
+        image: joindevops/user:1.4.0
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: user
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: user
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: user
+  ports:
+  - protocol: TCP
+    port: 8080 # servie port
+    targetPort: 8080 # container port
+
+commands --
+cd k8-roboshop/user
+kubectl create -f manifest.yaml
+
+goto k9s -- see user is created or not
+press l to check logs -- 
+press w -- for toggle wrap 
+
+if u made any changes in config map 
+kubectl apply -f manifest.yaml
+creates new config map 
+if config map changes & we have to restart the pod
+now select user & press ctrl_d --to delete user -- the deployment will be deleted
+immediately creates new deployment with new configmap
+
+now open debug --
+press s
+curl http://user:8080/health
+u can see user is up and communicating  
+don't delete deployments (by deleting deployment replica set will be deleted & we cannot rollback) just delete pods 
+
+now lets see shipping      
+now lets see shipping      
+lets optimize the shipping docker file
+JDK JRE
+JRE -- java runtime environment
+JDK -- java Development environment
+JDK = JRE + development/build tools
+
+for running in production JRE is enough
+maven contains JDK & JRE , we need to optimize this
+present shipping image size is 960 MB (majority of the size is occupied by maven & jdk) , we need to optimize this
+from that image we need only jar file
+node_js -- npm install -- create node_modules(libraries are here)
+java -- maven package -- create target folder and .jar file inside that
+.jar = bytecode + dependancies
+
+by using two RUN instructions -- two layers will be created
+u can always club multiple run instructions into single instruction to form one layer
+use && \ -- to club multiple instructions
+search -- alpine images in java
+u can see eclipse-termurin:17-jre-alpine
+
+maven is very huge , we r using this for build
+for running use this eclipse-termurin:17-jre-alpine , it is small
+
+open roboshop-docker -- shipping --
+Dockerfile
+===========
+FROM maven:3.9.14 AS builder
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package && \
+    mv target/shipping-1.0.jar shipping.jar 
+
+FROM eclipse-temurin:17-jre-alpine
+EXPOSE 8080
+WORKDIR /app
+RUN addgroup -S roboshop && adduser -S roboshop -G roboshop && \
+    chown -R roboshop:roboshop /app
+COPY --from=builder /app/shipping.jar .
+USER roboshop
+ENTRYPOINT ["java", "-jar", "shipping.jar"]
+
+commands --
+docker build -t jujjurisowjanya/shipping:1.4.0 .
+docker images
+image size will be 333 MB
+
+now lets run the shipping image using k8s
+for starting shipping application & for loading data it takes some time so write startup probe here
+mention failure threshold & period seconds 
+add end points in configmap of shipping
+
+open k8s-roboshop -- create folder shipping --
+manifest.yaml
+=============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shipping
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: shipping
+data:
+  CART_ENDPOINT: "cart:8080"
+  DB_HOST: "mysql"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: shipping
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: shipping
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: shipping
+    spec:
+      containers:
+      - name: shipping
+        image: joindevops/shipping:1.4.0
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "200m"
+            memory: "256Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 20
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: shipping
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: shipping
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: shipping
+  ports:
+  - protocol: TCP
+    port: 8080 # servie port
+    targetPort: 8080 # container port
+
+commands --
+cd k8s-roboshop/shipping
+kubectl apply -f manifest.yaml
+
+if we give ecr url while pulling the image it uses ECR url
+if we give docker url it pulls the image from docker
+if we don't mention anything it uses docker bydefault
+we have to create MySQL container before doing shipping
+
+
+
+
+
+
+
+
+
+
+
+
+

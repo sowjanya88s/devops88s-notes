@@ -21,7 +21,7 @@ for copying use ansible.builtin.copy module
 and then we have to enable and start catalogue , this fails if we don't load the data into mongodb
 to load data into mongodb -- install mongodb client in catalogue server
 copy mongo repo into catalogue server by using ansible.builtin.copy module
-and then install mongodb-mongo
+and then install mongodb-mongosh
 before loading data into mongodb -- first check data is available in mongodb 
 for that we have used one command in shell , take that command
 mention mongodb_host as variable in inventory file then we can get access anywhere in entire folder (i.e ansible-roboshop)
@@ -48,7 +48,7 @@ passing the instances names in list
 	{{ item.item }} => 1st element access => name
 	{{ item.instances[0].private_ip_address }}
 	
- name-of-instance or frontend-dev.daws88s.online -> private_ip_address
+ name-of-instance is other than frontend-dev.daws88s.online -> private_ip_address
 	
 	roboshop-dev.daws88s.online -> public_ip_address
 	loop: ec2_output.results

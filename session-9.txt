@@ -1,3 +1,6 @@
+ICANN -> Internet corporation for assigned names and numbers
+Non profit organisation -- managed by multiple companies and organizations
+
 facebook.com
 google.com
 when u enter a domain name at first it checks
@@ -39,7 +42,7 @@ if u want to purchase a domain named --> joindevops.com
 2. if available, collect the details name, company, address, mobile, email id, payment info, etc.
 3. when we complete payment, godaddy updates TLD about buyer details and domain details..
 
-4. now we have to match the domain with ip address. create one A record against the domain
+4. now we have to map the domain with ip address. create one A record against the domain
 
 joindevops.com A 167.89.87.23
 domains are managed by brokers

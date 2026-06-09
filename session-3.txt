@@ -60,7 +60,7 @@ downloading files or softwares
 
 wget and curl
 
-https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.113/bin/apache-tomcat-9.0.113.tar.gz
+
 
 wget is used for downloading packages
 curl -> shows the o/p on the screen, it will not download by default

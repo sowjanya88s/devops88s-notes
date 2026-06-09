@@ -35,7 +35,7 @@ tags should be mentioned at the end of code
 
 now lets implement ec2 
 here we are creating only ec2 instance so name it as this
-sg_id is alist call it as sg_ids , while mentioning its data type use list(string)
+sg_id is a list call it as sg_ids , while mentioning its data type use list(string)
 tags is optional and it is map data type , if we mention default = {}  -- then it is optional
 
 now create one more repo -- terraform-aws-instance
@@ -245,9 +245,9 @@ subnet is like a partition
 to provide high availability we will create subnets in min 2 az's
 internet gateway/modem -- through this only we can connect to subnets in vpc
  
-form internet gatway -- we will create route tables & routes for public & private subnets
-there wil be public route tables & routes for public subnet
-there wil be private route tables & routes for private subnet
+from internet gateway -- we will create route tables & routes for public & private subnets
+there will be public route tables & routes for public subnet
+there will be private route tables & routes for private subnet
 
 CIDR -- classless inter domain routing
 

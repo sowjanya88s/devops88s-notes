@@ -603,7 +603,7 @@ catalogue.service -- template
 we should call it as catalogue.service.j2
 catalogue -- templates -- catalogue.service.j2
 copy catalogue.service into catalogue.service.j2
-if a variable is useful one or more places place that variable in group_vars/all.yaml
+if a variable is useful in one or more places place that variable in group_vars/all.yaml
 
 place mongo.repo in catalogue/files/mongo.repo
 
@@ -651,13 +651,13 @@ roles -- user -- tasks -- main.yaml
 user -- templates -- user.service.j2
 user -- meta -- main.yaml
 
-tasks -- main.yaml
+meta -- main.yaml
 ==================
 dependencies:
 # catalogue is dependent on common role
 - role: common
 
-meta -- main.yaml
+tasks -- main.yaml
 =================
 - name: app setup
   ansible.builtin.import_role:
@@ -706,14 +706,13 @@ create cart repo in roles
 roles -- cart -- tasks -- main.yaml
 cart -- templates -- user.service.j2
 cart -- meta -- main.yaml
-
-tasks -- main.yaml
+meta -- main.yaml
 ==================
 dependencies:
 # catalogue is dependent on common role
 - role: common
 
-meta -- main.yaml
+tasks -- main.yaml
 =================
 - name: app setup
   ansible.builtin.import_role:
@@ -783,7 +782,7 @@ MYSQL_ROOT_PASSWORD: RoboShop@1
 command to execute -- ansible-playbook -e component=MySQL roboshop.yaml
 
 roles -- rabbitmq -- tasks -- main.yaml
-MySQL -- files -- RabbitMQ.repo
+Rabbitmq -- files -- RabbitMQ.repo
 
 main.yaml
 =========

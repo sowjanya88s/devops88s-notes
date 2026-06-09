@@ -29,7 +29,7 @@ hardware and software are tightly coupled
 
 Authentication mechanisms
 ========================
-1. what you can remember
+1. what you can remember (passwords)
 2. RSA Tokens, OTP, Authenticators -> What you have
 3. What you are -> fingerprints, retina, palm, etc...
 
@@ -43,7 +43,7 @@ ssh-keygen -f daws-88s
 -> public key
 -> private key
 
-place public key in aws
+place public key in aws server
 
 ssh-keygen -f daws-88s
 -> private key

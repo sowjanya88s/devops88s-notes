@@ -106,6 +106,7 @@ How to give sudo access to user
 
 /etc/sudoers
 
+command is used in Linux to remove a user from a group --
 gpasswd -d <user-name> <group-name>
 
 .zip -> windows zip format

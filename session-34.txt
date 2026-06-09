@@ -365,7 +365,7 @@ clear isolation
 blast radius is zero
 separate states
 
-to avoid this advantage(i.e repetitive code) -- we have concept called -- terraform modules
+to avoid this disadvantage(i.e repetitive code) -- we have concept called -- terraform modules
 we can use CICD tools to reduce human errors here
 
 terraform modules 

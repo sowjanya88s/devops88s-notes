@@ -25,10 +25,10 @@ terraform apply -auto-approve ;
 cd .. ; 
 done
 
-creates in infra by going into all folders
+creates infra by going into all folders
 
 now lets see creation of databases
-lets see creation of mongodb for that we need data source
+lets see creation of mongodb for that we need 
 we need to create mongodb in database subnet id -- to get database subnet id & mongodb-sg-id
 declare variables in locals to retrieve the values of database subnet id & mongodb-sg-id
 in main.tf -- write code to launch instance
@@ -52,7 +52,7 @@ write one script -- bootstrap.sh
 connecting to mongodb
 install ansible inside bastion -- connect to mongodb
 we can use bastion as ansible controller because it has access to port 22 of mongodb
-or else install ansible mongodb & configure it as localhost
+or else install ansible /in mongodb & configure it as localhost
 
 copy bootstrap.sh into mongodb & execute through remote exec
 bootstrap.sh
@@ -385,9 +385,9 @@ user-data
 =========
 1. once the system is provisioned , aws executes the commands inside user_data
 2. if user_data script is failed , terraform is not aware. terraform is still success
-3. since AWs runs user_data we can't get immediate log
+3. since AWS runs user_data we can't get immediate log
 4. useful for simple installations
-5. we can check the logs at 
+5. we can check the logs at /var/log/cloud-init-output.log..
 
 provisioner
 ===========
@@ -403,8 +403,37 @@ this time the server will be configured with bootstrap.sh
 after logging in we can check user_data logs at -- /var/log/cloud-init-output.log
 /home will be allocated with 31 gb
 
+30-bastion -- main.tf
+=====================
+resource "aws_instance" "bastion" {
+  ami           = data.aws_ami.example.id
+  instance_type = "t3.micro"
+  vpc_security_group_ids = [local.bastion_sg_id]
+  subnet_id  = local.public_subnet_id
+  iam_instance_profile = aws_iam_instance_profile.bastion.name
+  user_data = file("bastion.sh")
+    
+    root_block_device {
+    volume_size = 40 # in GB <<----- I increased this!
+    volume_type = "gp3"
+    
+#tags for volume
+   tags = merge(local.common_tags ,
+    {
+      Name = "${var.project}-${var.environment}-bastion"
+   },
+    var.bastion_tags
+  )
+  }
 
-
+# tags for instance
+  tags = merge(local.common_tags ,
+  {
+    Name = "${var.project}-${var.environment}-bastion"
+  },
+  var.bastion_tags
+  )
+}
 
 
 

@@ -123,7 +123,7 @@ the services which are created one hour or one minute before will not be reflect
 
 if we give one aws account -- with only read access -- in that u can only create infra by using terraform code -- by seeing terraform code we can tell what are the services we are running in aws account
 
-by using terraform we can create , read , update , delete the infra by using terraform
+by using terraform we can create , read , update , delete the infra 
 
 4. cost optimisation 
 doing infra creation & update & deletion manually it will takes hours of time 

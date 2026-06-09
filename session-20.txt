@@ -186,7 +186,7 @@ app-password
 opswuoalzivjwfwf
 
 open conf file 
-vi /etc/msmtprc -- write below content replace mails & app passwords (don't change gamil server's url and password)
+vi /etc/msmtprc -- write below content replace mails & app passwords (don't change gmail server's url and password)
 
 
 defaults

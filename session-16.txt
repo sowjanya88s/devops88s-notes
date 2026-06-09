@@ -192,7 +192,7 @@ initially i value is 10 -- 10<10 -- exits
 
 we use for loop -- for readability and to decrease no.of lines of code
 
-writing of simple for loop in shell script
+writing  simple for loop in shell script
 
 basic-for-loop.sh
 =================
@@ -491,8 +491,8 @@ according to performance level -- trap and validate are good
 
 up to now,
 aws account  -- communication or connected -- UI console
-we can connect with CLI -- authentication will be there here also -- only commands
-SDK (software development kit) -- it hits AWS -- AWS developed API's -- SDK like a dependancy library -- SDK developed for programs
+we can connect with CLI -- authentication will be there & here also -- only commands
+SDK (software development kit) -- it hits AWS -- AWS developed API's -- SDK like a dependancy library -- SDK developed for programmers
 console or CLI or SDk -- all are using API's only
 this API can be developed using any programming language -- it can be python , java, nodejs , .NET
 by installing these libraries we can directly connect with AWS API -- by that we can connect to AWS 

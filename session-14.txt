@@ -42,7 +42,7 @@ filesystems can be -- xfs , ext3 , ext4
 now create one directory here
 mkdir softlinks
 command to create softlink of a file -- 
-syntax -- ln -s or ln -s <original-file-name> <link-file-name>
+syntax -- ln -s or ln -s <new-link-file-name> <old-file-name>
 ln -s ../Linux.txt soft-link
 this will create softlink of file Linux.txt in links folder with name soft-link
 permissions starting with l -- means softlink  && soft-link file points to original file Linux.txt
@@ -219,8 +219,8 @@ echo "hello world" -- output -- hello world
 
 git add <file-name>
 git status
-if filename comes in red colour -- then ur code is in ur workspace
-if filename comes in green colour -- then ur code is in ur local repo 
+if filename comes in red colour -- then ur code is in not in staging area
+if filename comes in green colour -- then ur code is in ur staging area
 
 3. commit to local repo
 

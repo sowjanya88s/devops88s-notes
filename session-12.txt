@@ -117,7 +117,7 @@ master-data.sql contains huge data regarding all countries , states , villages i
 
 go into mysql-server
 
-check databases -- ushould see cities db
+check databases -- u should see cities db
 tables -- cities and codes
 
 run below commands 
@@ -133,7 +133,7 @@ payment application is developed by using python
  
 
 Python
-============
+======
 file extension -- .py
 build tool -- pip
 dependancies -- requirements.txt

@@ -69,7 +69,7 @@ state will be changed continuously
 state file is used by terraform
 tf files are for us
 
-when u give -- terraform apply -- try to open terrafoirm.tfstate -- unable to read terraform.tftstate
+when u give -- terraform apply -- try to open terraform.tfstate -- unable to read terraform.tftstate
 because in this time terraform accesses this file so it locks the state file
 once terraform apply is over -- then u can open terraform.tfstate file
 
@@ -107,7 +107,7 @@ because if one process is running , modifications are under progress , now allow
 s3
 ===
 open aws console -- s3 -- create bucket -- bucket name should be universally unique -- in aws
-acls'e enabled
+acl's enabled
 block all public access
 create bucket 
 
@@ -148,7 +148,7 @@ terraform apply
 now goto s3 -- click on ur s3 bucket -- objects -- remote-state.tfstate.lock
 after applying infra is done -- lock will be released 
 u can see the file -- remote-state.tfstate
-now u can open and u can see the contents of state file    -- 47 mins
+now u can open and u can see the contents of state file    
 
 note : in terraform where to use [] and where to use ()
 =======================================================
@@ -263,7 +263,7 @@ variable "environment" {
 /* variable "instance_name" {
     type = string
     default = "${var.name}-${var.environment}" # locals-dev
-} */  # this block of code throws errrors because we can't use one variable in another variable , so mention it in locals
+} */  # this block of code throws errors because we can't use one variable in another variable , so mention it in locals
 
 
 variable "ec2_tags" {

@@ -141,7 +141,7 @@ enter your first name ->
 enter your last name ->
 
 success test cases -> right inputs, result fail -> failure
-failure test cases -> failure input, result succes -> failure
+failure test cases -> failure input, result success  -> failure
 
 +ve, -ve test cases
 10 test cases -> less chances for invalid defects, 2 invalid defects
@@ -163,7 +163,7 @@ Ofcourse we use multiple tools to make this process smooth. continuous developme
 6 months -> 100$ credits + 100$ credits
 
 debit and credit
-international transformations enable -> netbanking, online spending, etc.
+international transactions enable -> netbanking, online spending, etc.
 	SBI, Rupay try to avoid.. 
 	call to customer care
 use bank address while creating account

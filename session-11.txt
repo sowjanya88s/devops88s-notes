@@ -15,10 +15,10 @@ see mongodb documentation in roboshop folder
 
 NoSQL
 =======
-data is un sctructured
+data is unstructured
 useful when huge amounts of data
 data is stored as documents
-generally used for product catalouges, Real-time analytics, etc but not for transactions
+generally used for product catalogues, Real-time analytics, etc but not for transactions
 
 Redis
 =======
@@ -64,7 +64,7 @@ when data in frontend or backend loses we can recover but data in db is lost we 
 1) firstly we setup mongodb -- 
 
 service quotas -- aws services -- ec2 -- Running on-demand standard(A,C,D,H,I,M,R,T,Z) instances -- default 5 -- increase quota value -- 20 - request
-increase servicequota before practice because it takes sometime (request 20)
+increase service quota before practice because it takes sometime (request 20)
 
 we can't install mongodb directly from internet
 add mongodb repo in /etc/yum.repos.d/
@@ -132,7 +132,7 @@ exit
 
 to check the logs we can use /var/log/messages or journalctl -u catalogue
  
-in that u can see mongodb connected
+in that u can see mongodb connected or not
 
 3)now we configure frontend i.e nginx
 
@@ -152,7 +152,7 @@ restart nginx
 create r53 record for nginx server -- give public ip
 open browser -- http://sowjanya.fine -- we can see the products data in categories
 inspect -- network -- refresh -- click on categories -- http://sowjanya.fine/api/catalogue/categories -- response -- artificial intelligence , robot
-click on one product in artificial intelligence and then ispect again
+click on one product in artificial intelligence and then inspect again
 
 /api/catalogue -> forward those requests to catalogue component -- this is fixed by frontend developers
 nginx logs -- /var/log/nginx
@@ -178,7 +178,7 @@ reload the daemon and enable and start the user
 
 6) let's configure cart
 enable nodejs: 20 and install nodejs
-create systemm userwith name roboshop
+create system user with name roboshop
 create /app directory
 download the code and unzip it in /app
 cart depends on redis and catalogue
@@ -187,12 +187,12 @@ then enable cart and start cart
 
 health check command for nodejs instances -- curl http://localhost:8080/health
 
-now goto front end server -- nginx.conf file change location of user & cart nad restart nginx
+now goto front end server -- nginx.conf file change location of user & cart and restart nginx
 
 open browser -- login -- register -- with ur name & mail id 
 as a devops engineer we should provide best infra for application and good release
 now u can browse products and add product to cart
-increase servicequota before practice because it takes sometime (request 20)
+increase service quota before practice because it takes sometime (request 20)
 
 
 [Unit]

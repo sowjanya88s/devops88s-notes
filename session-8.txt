@@ -114,7 +114,7 @@ eenadu, tv9, manabadi, sakshi, etc.
 
 input -> Hall Ticket No , DOB
 
-emacet API -> eamcet DB
+eamcet API -> eamcet DB
 
 https://eamcet.ap.gov.in/api/results
 Request Format:
@@ -189,7 +189,7 @@ Domain
 DNS -> Domain name system
 
 upto now we have given ip addresses. ip address changes when we restart servers or when server crashes , we have to create new servers which is time consuming in this case server public ip address changes
-after that we have to change ip address -- in both cases updation of ip requires atleast 10 mins -- in projects 10mins downtime of website becomes huge loss
+after that we have to  change ip address -- in both cases updation of ip requires atleast 10 mins -- in projects 10mins downtime of website becomes huge loss
 
 humans ->reference --> names
 computers -> reference --> numbers

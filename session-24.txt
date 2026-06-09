@@ -147,7 +147,7 @@ clone the repo
 we will do all things using ansible
 for instance creation & R53 records we can use ansible
 
-we can do this in windows servers also , there we should use rdpc  where as in linux we use ssh protocol
+we can do this in windows servers also , there we should use rdp where as in linux we use ssh protocol
 
 roboshop using ansible
 =======================
@@ -169,7 +169,7 @@ we want to create multiple instances -- give name of the instances in instances 
 we thought creating instances for different environments --
 for that we should use multiple tags
 define variable like environment -- dev as value
-we can also mention tags for instances
+we can also mention tags for /instances
 
 we can pick the output by using register keyword
 
@@ -343,7 +343,7 @@ copy mongo.repo into ansible-roboshop folder
 
 in that we have to copy mongodb repo 
 for that use ansible.builtin.copy module of ansible
-this module takes source and destination & permissions inputs to it   -- 1 hr
+this module takes source and destination & permissions inputs to it   
 for all components in one project we will maintain on one os distribution
 by using ansible.builtin.dnf module we can install mongodb in server
 use ansible.builtin.service, to start and enable mongodb service
@@ -449,7 +449,7 @@ catalogue.yaml
     ansible.builtin.unarchive:
       src: /tmp/catalogue.zip
       dest: /app
-      remote_src: yes  #completed upto here in session-24
+      remote_src: yes 
 
   - name: install dependencies
     community.general.npm:

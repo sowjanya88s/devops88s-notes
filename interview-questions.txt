@@ -1,0 +1,656 @@
+introduction
+============
+“Hello, I’m Sowjanya. I have around 3 years of experience as an AWS DevOps Engineer.
+I’ve worked on tools like Shell scripting, Ansible, Terraform, Docker, Kubernetes, and Jenkins for infrastructure automation and CI/CD implementation.
+Currently, I’m working on the VAHAN project for NIC, which is a central government application used for issuing driving licenses and learner licenses online.
+My responsibilities include CI/CD pipeline management, containerized deployments using Docker and Kubernetes, infrastructure provisioning using Terraform, configuration management with Ansible, and monitoring application deployments in AWS environments.
+I also work closely with development teams for release management, troubleshooting deployment issues, and maintaining high availability environments.”
+
+Q2 — AWS Scenario Question
+
+Suppose you need to host a Java application in AWS with:
+
+high availability,
+auto scaling,
+load balancing,
+and CI/CD deployment.
+
+How would you design the architecture?
+
+“I would design the application using a highly available architecture in AWS.
+
+First, I would create a VPC with public and private subnets across multiple Availability Zones.
+The application EC2 instances would be placed in private subnets inside an Auto Scaling Group to ensure scalability and self-healing.
+
+An Application Load Balancer would be placed in public subnets to distribute incoming traffic across healthy EC2 instances.
+
+For DNS routing, I would use Route 53.
+If disaster recovery is required, I can deploy the application in multiple regions and use Route 53 failover or latency-based routing.
+
+For CI/CD, developers push code to GitHub/GitLab, Jenkins pipeline builds the application, creates Docker images if containerized, runs tests, and deploys to EC2 or Kubernetes.
+
+Infrastructure provisioning can be automated using Terraform, and configuration management can be done using Ansible.
+
+For monitoring and logging, I would use CloudWatch, Prometheus, and Grafana.
+Security groups, IAM roles, and HTTPS through ACM certificates would also be configured.”
+
+Q3 — Kubernetes
+
+What is the difference between:
+
+Deployment
+ReplicaSet
+StatefulSet
+
+And when do you use each one?
+
+Deployment
+
+A Deployment is a higher-level Kubernetes object used to manage stateless applications.
+
+It:
+
+manages ReplicaSets,
+handles rolling updates and rollbacks,
+maintains desired pod count,
+recreates failed pods automatically.
+
+We usually define:
+
+container image,
+replicas,
+labels/selectors,
+ports,
+environment variables,
+resource limits, etc.
+
+Use case:
+Used for stateless applications like:
+
+nginx
+frontend apps
+APIs
+microservices
+ReplicaSet
+
+ReplicaSet ensures that a specified number of pod replicas are always running.
+
+If a pod crashes, ReplicaSet recreates it automatically.
+
+Normally, we don’t create ReplicaSets directly because Deployments manage them internally.
+
+Use case:
+Maintaining pod availability.
+
+StatefulSet
+
+StatefulSet is used for stateful applications where pod identity and storage persistence are important.
+
+Features:
+
+stable pod names (mysql-0, mysql-1)
+ordered deployment and scaling
+persistent storage using Persistent Volumes
+
+Use case:
+Used for:
+
+MySQL
+MongoDB
+Kafka
+Cassandra
+
+where data persistence and stable network identity are required.
+
+Interview Tip:
+A common follow-up question is:
+
+“Why not use Deployment for databases?”
+
+Expected answer:
+Because Deployments create interchangeable pods, but databases need stable identity and persistent storage, which StatefulSet provides.
+
+Docker Image
+A Docker image is a read-only template used to create containers.
+It contains:
+
+
+application code,
+
+
+dependencies,
+
+
+libraries,
+
+
+runtime,
+
+
+configuration files.
+
+
+Example:
+docker pull nginx
+The nginx image can be used to create multiple containers.
+
+Docker Container
+A container is a running instance of a Docker image.
+It is lightweight and isolated.
+Example:
+docker run -d nginx
+This creates and runs a container from the nginx image.
+
+Dockerfile
+A Dockerfile is a text file containing instructions to build a Docker image.
+Common instructions:
+FROMRUNCOPYADDWORKDIRCMDENTRYPOINTEXPOSE
+Example:
+FROM nginxCOPY . /usr/share/nginx/html
+
+Docker Container Lifecycle
+Basic lifecycle:
+Create → Run → Pause/Unpause → Stop → Start → Remove
+Important commands:
+docker createdocker rundocker stopdocker startdocker restartdocker rm
+
+Q5 — Jenkins CI/CD
+Suppose developers push code into GitHub.
+Explain the complete Jenkins pipeline flow until deployment into Kubernetes.
+Mention:
+
+
+webhook,
+
+
+Jenkinsfile,
+
+
+Docker,
+
+
+image repository,
+
+
+Kubernetes deployment.
+
+
+Jenkins CI/CD Flow (GitHub → Kubernetes)
+Step 1 — Developer Pushes Code
+
+Developer pushes code to GitHub repository.
+
+Step 2 — Webhook Triggers Jenkins
+
+GitHub webhook notifies Jenkins automatically whenever code is pushed.
+
+So Jenkins pipeline starts automatically.
+
+Step 3 — Jenkins Pulls Code
+
+Jenkins connects to GitHub and pulls the latest source code.
+
+Example:
+
+git clone <repo-url>
+Step 4 — Build Stage
+
+Jenkins builds the application.
+
+Example:
+
+Maven for Java
+npm for Node.js
+mvn clean package
+Step 5 — Run Tests
+
+Pipeline executes unit tests or integration tests.
+
+If tests fail → pipeline stops.
+
+Step 6 — Build Docker Image
+
+Jenkins creates Docker image using Dockerfile.
+
+docker build -t app:v1 .
+Step 7 — Push Image to Repository
+
+Image is pushed to Docker Hub or ECR.
+
+docker push repo/app:v1
+Step 8 — Deploy to Kubernetes
+
+Jenkins updates Kubernetes deployment using kubectl or Helm.
+
+kubectl apply -f deployment.yaml
+
+or
+
+helm upgrade
+
+Kubernetes pulls latest image and performs rolling update.
+
+Step 9 — Monitoring
+
+Application monitoring using:
+
+Prometheus
+Grafana
+CloudWatch
+
+Logs:
+
+ELK stack / Loki
+
+Interview Tip:
+Try to explain pipelines in sequence:
+
+GitHub → Webhook → Jenkins → Build → Test → Docker Build → Push → K8s Deploy
+
+That one line alone impresses interviewers.
+
+CrashLoopBackOff Meaning
+
+CrashLoopBackOff means:
+
+container started,
+but crashed repeatedly,
+and Kubernetes is trying to restart it continuously.
+Troubleshooting Steps
+1. Check Pod Status
+kubectl get pods
+2. Describe the Pod
+kubectl describe pod <pod-name>
+
+Check for:
+
+events
+image pull errors
+OOMKilled
+probe failures
+mount issues
+3. Check Container Logs
+kubectl logs <pod-name>
+
+If container restarts quickly:
+
+kubectl logs <pod-name> --previous
+
+This is VERY important in interviews.
+
+4. Common Reasons
+
+You should mention common causes:
+
+Wrong application configuration
+Application crash
+Database connectivity failure
+Wrong environment variables
+Port mismatch
+Missing secrets/configmaps
+Liveness probe failure
+Memory issue (OOMKilled)
+Wrong startup command
+5. Verify Resources
+kubectl top pod
+
+Check CPU/memory usage.
+
+6. Verify ConfigMaps/Secrets
+kubectl get configmap
+kubectl get secret
+7. Check Image & Tag
+
+Sometimes wrong Docker image or tag causes startup failure.
+
+8. Exec into Pod (if running briefly)
+kubectl exec -it <pod-name> -- sh
+
+Interview Tip:
+A very strong line is:
+
+“First I check describe, then logs, then events, then configuration and resource issues.”
+
+Q7 — Terraform
+
+What is the difference between:
+
+terraform init
+terraform plan
+terraform apply
+
+And what is the purpose of Terraform state file?
+
+terraform init
+
+Used to initialize the Terraform working directory.
+
+It:
+
+downloads required providers (AWS provider, etc.)
+initializes backend configuration
+downloads modules
+prepares Terraform environment
+
+Example:
+
+terraform init
+terraform plan
+
+Used to preview infrastructure changes before creation.
+
+It compares:
+
+current state
+vs
+Terraform configuration
+
+and shows:
+
+resources to create
+modify
+destroy
+
+No actual resources are created here.
+
+Example:
+
+terraform plan
+terraform apply
+
+Actually creates or modifies infrastructure based on Terraform configuration.
+
+It executes the changes shown in the plan.
+
+Example:
+
+terraform apply
+Terraform State File
+
+Terraform state file is:
+
+terraform.tfstate
+
+It stores the current state of infrastructure managed by Terraform.
+
+Purpose:
+
+maps Terraform configuration to real AWS resources
+tracks resource IDs and metadata
+helps Terraform know what already exists
+enables incremental changes
+
+Without state file:
+Terraform cannot determine existing infrastructure properly.
+
+Q8 — AWS Networking
+
+Explain the difference between:
+
+Security Group
+NACL
+
+And tell me:
+
+which is stateful,
+which is stateless,
+and where each operates.
+
+Security Group vs NACL
+FeatureSecurity GroupNACLLevelInstance levelSubnet levelTypeStatefulStatelessRulesAllow rules onlyAllow and Deny rulesReturn TrafficAutomatically allowedMust be explicitly allowedEvaluationAll rules evaluatedRules evaluated in orderUse CaseInstance protectionSubnet-level filtering
+
+Security Group
+
+
+Attached to EC2 instances
+
+
+Works like a virtual firewall
+
+
+Stateful:
+
+
+if inbound traffic is allowed,
+
+
+outbound response is automatically allowed
+
+
+
+
+Example:
+If port 22 inbound is allowed,
+SSH response traffic is automatically allowed.
+
+NACL (Network ACL)
+
+
+Applied at subnet level
+
+
+Stateless:
+
+
+inbound and outbound rules must both be configured
+
+
+
+
+Supports deny rules
+
+
+Example:
+Can block a specific IP range at subnet level.
+
+Interview Tip:
+Very common question:
+
+“Which provides stronger security?”
+
+Expected answer:
+
+
+NACL provides subnet-level control
+
+
+Security Group provides instance-level control
+
+
+Both are used together in production
+
+
+
+Q9 — Real-Time Scenario
+Suppose:
+
+
+application is down,
+
+
+users cannot access website,
+
+
+manager says “fix immediately.”
+
+
+What are the first 5 things you will check as a DevOps engineer?
+
+Production Outage Troubleshooting Steps
+1. Check Application Health
+
+First verify:
+
+application is running,
+pods/EC2 instances are healthy.
+
+Commands:
+
+kubectl get pods
+kubectl get svc
+
+or check EC2 instance status in AWS.
+
+2. Check Application Logs
+
+Check:
+
+application logs
+container logs
+server logs
+
+Example:
+
+kubectl logs <pod-name>
+
+Look for:
+
+exceptions
+DB connection failures
+timeout issues
+crash errors
+3. Check Infrastructure Components
+
+Verify:
+
+Load Balancer health
+Target groups
+Auto Scaling instances
+Node status
+
+In Kubernetes:
+
+kubectl get nodes
+4. Check Database Connectivity
+
+Check:
+
+DB availability
+slow queries
+connection limits
+storage full
+
+Sometimes application outage is actually DB outage.
+
+5. Check Network & DNS
+
+Verify:
+
+Route 53 / DNS
+Security Groups
+NACL
+Ingress rules
+Service endpoints
+
+Sometimes traffic is not reaching the application.
+
+6. Check Resource Utilization
+
+Verify:
+
+CPU
+Memory
+Disk space
+
+Possible issues:
+
+OOMKilled
+disk full
+high CPU
+7. Check Recent Changes
+
+Very important production practice:
+
+recent deployment?
+config change?
+secret rotation?
+Terraform changes?
+
+Many outages happen after deployments.
+
+Interview Tip:
+A strong sentence:
+
+“I first identify whether it is application issue, infrastructure issue, database issue, or network issue.”
+
+That sounds mature and production-oriented.
+
+What Happens Internally?
+
+When we run:
+
+kubectl apply -f deployment.yaml
+
+the following happens:
+
+1. kubectl Sends Request to API Server
+
+kubectl reads the YAML file and sends REST API request to:
+
+kube-apiserver
+
+The API server is the entry point of Kubernetes cluster.
+
+2. Authentication & Validation
+
+API server:
+
+authenticates the request,
+validates YAML syntax,
+checks RBAC permissions.
+3. Object Stored in etcd
+
+Deployment configuration is stored in:
+
+etcd
+
+which is Kubernetes key-value database.
+
+4. Deployment Controller Acts
+
+Deployment controller notices new Deployment object.
+
+Then it creates:
+
+ReplicaSet
+5. ReplicaSet Creates Pods
+
+ReplicaSet ensures desired number of pods are running.
+
+Then pod objects are created.
+
+6. Scheduler Assigns Node
+
+Kubernetes Scheduler checks:
+
+CPU
+memory
+node availability
+
+and assigns pod to a worker node.
+
+7. Kubelet Pulls Image
+
+On worker node:
+
+kubelet
+
+communicates with container runtime (Docker/containerd).
+
+It:
+
+pulls image,
+starts container.
+8. Pod Becomes Running
+
+Finally pod status changes to:
+
+Running
+
+and application becomes accessible.
+
+Simple Flow to Remember
+kubectl → API Server → etcd → Deployment → ReplicaSet → Scheduler → Kubelet → Pod
+
+That one line is excellent for interviews.
+

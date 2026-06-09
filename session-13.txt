@@ -1,4 +1,4 @@
-Linux File system heirarchy
+Linux File system hierarchy
 
 c disk -- left for OS
 
@@ -33,7 +33,7 @@ later we mount them on our required path
 
 /mnt -> used to mount extra disks in linux server are here for temp purpose
 
-/opt -> optional. when you installed a software manually(ex-- by using a repo) you do it here. /opt/roboshop, /opt/tomcat, /opt/jobss etc.
+/opt -> optional. when you installed a software manually(ex-- by using a repo) you do it here. /opt/roboshop, /opt/tomcat, /opt/jboss etc.
 
 /proc -> processor id information, /proc/cpuinfo, /proc/meminfo. running process info is here related to kernel
 ls -l /proc
@@ -55,7 +55,7 @@ in recent days the RAM in mobiles are getting from 8GB to 16GB. they take some m
 
 /usr -> user related commands and libraries/binaries are here. any applications or commands only required for a particular user should be installed here
 
-/var -> variable files, continously growing files (ex - log files) are here
+/var -> variable files, continuously growing files (ex - log files) are here
 
 Hard Disk vs Network Disk
 =========================
@@ -206,7 +206,7 @@ p2 → 10G
 
 Partition 1 cannot grow because partition 2 is blocking it.
 
-You can: Grow p2 (recommended), ORCreate p3, OR
+You can: Grow p2 (recommended), OR Create p3, OR
 
 i have extended second partition with below commands 
 

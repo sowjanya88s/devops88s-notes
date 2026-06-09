@@ -74,18 +74,18 @@ data-types.yaml
   tasks:
   - name: print variables
     ansible.builtin.debug:
-      msg: | //to print multiple lines use / symbol
+      msg: | //to print multiple lines use | symbol
         Program: {{ PROGRAM }}
         Duration: {{ DURATION }}
         Is Live?: {{ IS_LIVE }}
         Details: {{ DETAILS }}
         Topics: {{ TOPICS }}
 
-command to execute -- ansible-playbook -i inventory.ini -e data-types.yaml 
+command to execute -- ansible-playbook -i inventory.ini  data-types.yaml 
 
 we will see conditions now
 conditions are useful in ansible to run a task or not
-when is the condition here -- is-live = true then "yes , it is live " will be printed on screen
+when is the condition here -- is-live = true then "yes , it is live" will be printed on screen
 otherwise nothing prints
 
 conditions.yaml
@@ -165,7 +165,7 @@ command to execute -- ansible-playbook -i inventory.ini facts.yaml
 
 in shell script we will execute command by placing it in $() and we will take it in a variable
 
-now we see how to execute on command and we take the output of command into variable .. this can be called as setfacts
+now we see how to execute one command and we take the output of command into variable .. this can be called as setfacts
 
 we will see the difference between shell and command modules
 ansible is a tool .. in any tool 100% automation is not available

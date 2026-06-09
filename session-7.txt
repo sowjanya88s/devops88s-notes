@@ -30,7 +30,7 @@ or u can simply give -- mysql because we r in mysql-server only
 But if your client and server both are in a single server, you can simply issue.
 mysql
 
-when u install mysql-server , mysql will be installed automatically
+when u install mysql-server , MySQL client will be installed automatically
 
 by placing all data in one table maintainence will become difficult. so we divide the data into multiple tables and relationship between them will be maintained by using primary key & foreign key
 
@@ -176,26 +176,9 @@ backend applications mostly opens 8080 port
 netstat -lntp -- 8080 opened by node -- u can see
 
 application health check
-curl http://<app-url>
+curl http://<app-url>/health
 
 checking whether app can connect to db
 telnet <db-url> 3306 (<dp-ip>)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 in Linux server if we install database software it will become database server

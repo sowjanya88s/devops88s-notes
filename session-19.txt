@@ -62,13 +62,12 @@ end_time=$(date +%s) -- converts script end time into seconds
 create a function which prints total time to complete execution of the script
 
 now we will configure catalogue 
-nodejs insetup is common for catalogue & cart & user
+nodejs setup is common for catalogue & cart & user
 in nodejs setup -- write code to disabling default  nodejs version , enabling nodejs required version , installing nodejs
 call this nodejs_setup funcion code from catalogue
 
 appsetup is also common for catalogue & cart & user
-in appsetup -- write code related to creating app directory , downloading code related to module(for ex: catalogue) , moving to app directory, removing already existing code in app directory
-, unzipping the code in /app
+in appsetup -- write code related to creating app directory , downloading code related to module(for ex: catalogue) , moving to app directory, removing already existing code in app directory, unzipping the code in /app
 call this app_setup function  from catalogue 
 
 so in common.sh -- create a function for nodejs_setup & app_setup
@@ -461,7 +460,7 @@ app_restart(){
 print_total_time(){
     END_TIME=$(date +%s)
     TOTAL_TIME=$(( $END_TIME - $START_TIME ))
-    echo -e "$(date "+%Y-%m-%d %H:%M:%S") | Script execute in: $G $TOTAL_TIME seconds $N" | tee -a $LOGS_FILE
+    echo -e "$(date "+%Y-%m-%d %H:%M:%S") | Script executed in: $G $TOTAL_TIME seconds $N" | tee -a $LOGS_FILE
 }
 
 we will do some tasks like  delete old logs , backup , disk utilization and trigger email using shell scripts

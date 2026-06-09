@@ -46,6 +46,32 @@ shipping -- tasks -- main.yaml
     name: payment
     state: restarted
     enabled: yes
+- name: install python dependencie
+  ansible.builtin.pip:
+    name: "{{ item }}"
+    executable: pip3.9
+  loop:
+  - cryptography
+  - PyMySQL
+
+- name: import shipping data
+  community.mysql.mysql_db:
+    state: import
+    name: all
+    login_host: "{{ MYSQL_HOST }}"
+    login_user: root
+    login_password: RoboShop@1
+    target: "{{ item }}"
+  loop:
+  - /app/db/schema.sql
+  - /app/db/app-user.sql 
+  - /app/db/master-data.sql
+
+- name: start and enable shipping
+  ansible.builtin.service:
+    name: shipping
+    state: restarted
+    enabled: yes
 
 shipping -- meta -- main.yaml
 ==============================
@@ -110,43 +136,21 @@ roles -- payment -- tasks -- main.yaml
     name: common
     tasks_from: app-setup.yaml
 
-- name: java setup
+- name: python setup
   ansible.builtin.import_role:
     name: common
-    tasks_from: java-setup.yaml
+    tasks_from: python-setup.yaml
 
 - name: systemd setup
   ansible.builtin.import_role:
     name: common
     tasks_from: systemd-setup.yaml
 
-- name: install python dependencie
-  ansible.builtin.pip:
-    name: "{{ item }}"
-    executable: pip3.9
-  loop:
-  - cryptography
-  - PyMySQL
-
-- name: import shipping data
-  community.mysql.mysql_db:
-    state: import
-    name: all
-    login_host: "{{ MYSQL_HOST }}"
-    login_user: root
-    login_password: RoboShop@1
-    target: "{{ item }}"
-  loop:
-  - /app/db/schema.sql
-  - /app/db/app-user.sql 
-  - /app/db/master-data.sql
-
-- name: start and enable shipping
+- name: restart payment
   ansible.builtin.service:
-    name: shipping
+    name: payment
     state: restarted
     enabled: yes
-
 
 payment -- meta -- main.yaml
 =============================
@@ -168,7 +172,7 @@ common -- tasks -- python-setup.yaml
   - gcc 
   - python3-devel
 
-- name: install dependencie
+- name: install dependencies
   ansible.builtin.pip:
     requirements: requirements.txt
     executable: pip3.9

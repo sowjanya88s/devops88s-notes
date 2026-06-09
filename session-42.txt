@@ -30,7 +30,7 @@ we have to take access on port number 80 from bastion to backend alb
 we can't take access of LB on port 22 & LB is completely managed by AWS
 listeners and routing
 listener -- private -- so http -- port number -- 80
-default action -- routing action -- fixed reponse -- 
+default action -- routing action -- fixed response -- 
 response code -- 200
 context type -- text/html
 response body -- <h1> hi, iam from backend HTTP ALB </h1>
@@ -139,7 +139,7 @@ SHIPPING_HOST: shipping.backend-alb-{{ env }}.daws88s.online
 PAYMENT_HOST: payment.backend-alb-{{ env }}.daws88s.online
 app_version: v3
 
-how frontend calls LB -- *.backend-dev.sowjanya.fun
+how frontend calls LB -- *.backend-alb-dev.sowjanya.fun
 in backend LB -- listeners and rules
 there is only one rule and that is default rule
 now we have to write some rules --
@@ -254,13 +254,13 @@ curl http://catalogue.backend-alb-dev.sowjanya.fun/health
 {"app":"ok","mongo":true}
 
 
-this request matches with LB record -- hits listener -- listener rules -- checks all rules -- matches with rule  catalogue.backend-alb-dev.sowjanya.fun -- request goes to catalogue 
+this request matches with LB record -- hits listener -- listener rules -- checks all rules -- matches with rule  catalogue.backend-dev.sowjanya.fun -- request goes to catalogue 
 
 if there are no targets listeners for the rule -- u will get 503 service temporarily unavailable error 
 
 resource creation flow 
-when request comes -- catalogue.backend-alb-dev.sowjanya.fun
-r53 record catalogue.backend-alb-dev.sowjanya.fun -- goes to LB -- listener rule -- target group -- instances in target
+when request comes -- catalogue.backend-dev.sowjanya.fun
+r53 record catalogue.backend-dev.sowjanya.fun -- goes to LB -- listener rule -- target group -- instances in target
 
 when u want to update the version of catalogue
 consider that we have 10 instances -- we need to change the version from v3 to v4
@@ -315,7 +315,7 @@ this listener will be attached to backend alb
 
 now create r53 record
 search -- aws r53 record terraform 
-serach for alias in it
+search for alias in it
 mention backend lb dns name in it
 mention zone id here
 before creation of record -- it checks backend LB is created or not

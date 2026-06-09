@@ -5,6 +5,7 @@ to send in format through web -- we should use html or css or javascript
 text-html.com -- if we give text to it , it gives html
 
 text 
+====
 hi devops team,
 
 there is an issue of disk-utilization in the server. pls find details the below
@@ -40,7 +41,7 @@ this shows private ip of ur instance
 
 now we have to trigger mail
 
-sh mail.sh "<to-mail>" "<subject>(ex: high disk usage on ipv4" "<message" "disk usage" "to_team"
+sh mail.sh "<to-mail>" "<subject>(ex: high disk usage on ipv4" "<message>" "disk usage" "to_team"
 after sending these details from disk-usage.sh they will goto mail.sh
 
 disk-usage.sh
@@ -143,7 +144,7 @@ that format is used by ansible in the background
 
 create two instances -- 1.node 2.shell-server
 
-without logging into server
+without logging into shell-server
 logging to node server from shell scripting server
 ssh ec2-user@<ip-of-node-server> 'touch /tmp/shell.txt'
 
@@ -180,7 +181,7 @@ after this only we can do application deployment in server -- this process is kn
 to manage this configuration
 CRUD -- creation, reading , updating and deletion the configuration
 
-documentation of for each and everything is not possible
+documentation  for each and everything is not possible
 and even history command has some limitations
 
 so by doing everything using scripts is called config management as source code-- it will be saved in git history -- using shell is not easy
@@ -200,13 +201,13 @@ in system design we have to make decision of push or pull
 pull method
 ============
 config in a server is called config mgmt server
-nodes(or servers or boxes) connects to config server for every 30 mins and checks for new config changes , if changes comes the nodes have to download and install them for that we need a component called agent
+nodes(or servers or boxes) connects to config server for every 30 mins and checks for new config changes , if changes comes, the nodes have to download and install them for that we need a component called agent
 we need to install the agent in nodes and  we have to configure (where to check for updates) them
 
 config mgmt --> connects to nodes
 disadvantages
 1. unnecessary installation (agent software needs some resources , there will be updates in agent software too)
-2. resource wastage (updates doe not comes for 30 mins)
+2. resource wastage (if updates does not comes for 30 mins)
 3. unnecessary traffic
 4. no adhoc updates (if update comes after 31 minutes we have to wait for 29 minutes to do it)
 5. agent connects to config server here we have to write new protocol to connect to sever and to download updates, need to open seperate port and resources are needed for installations
@@ -287,7 +288,7 @@ we have Markup languages
 ========================
 HTML (Hyper Text Markup Language), XML (Extensive Markup Language)
 
-when we place data in registration form markup language take values like this sends to backend
+when we place data in registration form , markup language take values like this & sends to backend
 <Register>
 	<Name>Sivakumar</Name>
 	<Mobile>12345678</Mobile>

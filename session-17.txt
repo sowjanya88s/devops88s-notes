@@ -10,7 +10,7 @@ to create a instance we have to give
 4. subnet id (goes by default)
 
 we need to perform authentication for script
-don't give ur username $ pwd on command line -- by that anyone can use those crdentials and they can use them
+don't give ur username $ pwd on command line -- by that anyone can use those credentials and they can use them
 
 Alternatively we can use IAM(Indentity Access Management) -- by creating user here we can control our AWS account
 goto AWS console -- IAM -- create user -- with ur name -- provide access to AWS console
@@ -56,8 +56,8 @@ we can add further details also like environment -- prod in tags -- these will r
 
 default command
 aws ec2 run-instances --image-id <ami-id> --instance-type <instance-type> -- security-group-ids <security-group-id> --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=MyNewInstance}]' --query 'Instances[0].InstanceId' --output text
-by this we can see all the data about our instance except public id
-to generate public id -- it takes some time
+by this we can see all the data about our instance except public ip
+to generate public ip -- it takes some time
 
 modify this according to ur requirements
 aws ec2 run-instances \
@@ -83,7 +83,7 @@ check if instance name is frontend or not
 
 for better readability we can add line breaks by using \ (forward slash)
 
-if u script upto now -- it will show private ip of instance as output
+if u execute script upto now -- it will show private ip of instance as output
 
 now we have to update AWS R53 records
 
@@ -270,7 +270,7 @@ connect to catalogue instance and run below script
 
 install git & clone git repo 
 
-place catalogue.repo in current git folder -- roboshop-shell
+place catalogue.service in current git folder -- roboshop-shell
 
 catalogue.sh
 =============

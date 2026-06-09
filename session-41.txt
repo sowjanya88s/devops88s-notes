@@ -44,7 +44,7 @@ we have mentioned commands to install terraform in user_data
 
 if u give component as MySQL -- 
 request goes to  ansible-roboshop-roles-tf -- group_vars -- MySQL -- vault.yaml
-executes and MySQL password will be stored in ssm parameter store
+executes and MySQL password will be retrieved from ssm parameter store
 if u mentioned mysql_password in MySQL -- vars -- main.yaml
 remove it (don't store passwords in GitHub)
 
@@ -370,7 +370,7 @@ while using this ansible code in prod -- environment is prod -- so that prod val
 be careful while using templates & place holders
 
 lets see creation of RabbitMQ
-fetch rabbiotmq_sg_id from ssm parameter store by using data source
+fetch rabbitmq_sg_id from ssm parameter store by using data source
 we can store RabbitMQ username & password in ssm parameter store & fetch from there otherwise pass them directly from roboshop-ansible-roles-tf -- RabbitMQ -- tasks -- main.yaml -- as it is 
 create RabbitMQ like MySQL
 in sg-rules -- allow 22 port from RabbitMQ to bastion

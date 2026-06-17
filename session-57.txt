@@ -151,7 +151,7 @@ Sets
 3. DaemonSet
 4. StatefulSet
 
-how o create multiple pods ?
+how to create multiple pods ?
 
 Replicaset
 ==========

@@ -29,7 +29,7 @@ why we use container orchestration ?
 to manage multiple servers -- there needs to be someone to provide the instruction 
 container orchestration tools -- docker swarm , k8s etc
 k8s setup is easy & management is difficult
-dokcer swarm -- autoscaling not available , storing secrets & managing volumess is difficult , networking is available but not perfect
+docker swarm -- autoscaling not available , storing secrets & managing volumes is difficult , networking is available but not perfect
 
 kuberetes setup
 ===============
@@ -69,7 +69,7 @@ install the docker in it
 commands to install docker --
 sudo dnf -y install dnf-plugins-core
 sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
-sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin-y
+sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
 sudo systemctl enable --now docker
 sudo systemctl start docker
 sudo usermod -aG docker ec2-user
@@ -202,7 +202,6 @@ docker creates intermediate container for every instruction
 it will run next following instruction inside this container -> create image out of it
 then it creates another intermediate container from that image, run the next instruction -> create image out of it
 
-so for every instruction new layers are created -> docker exports all these layers into hub while pushing the image
 so for every instruction new layers are created -> docker exports all these layers into hub while pushing the image
 
 we must keep frequently changing instructions at the bottom of Dockerfile to make the build process fast and storage

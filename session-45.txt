@@ -11,7 +11,8 @@ this is reason why browser always complaints when we use http sites -- as unsecu
 
 so nowadays everybody are moving towards https
 
-HTTP -- hyper text transfer protocol secure -- HTTP running inside an encrypted tunnel 
+HTTPS
+ -- hyper text transfer protocol secure -- HTTP running inside an encrypted tunnel 
 
 SSL -- secure socket layer -- original encryption protocol version for that tunnel -- it is broken
 
@@ -106,7 +107,7 @@ lets generate public key & private key
 
 openssl will be installed bydefault on all servers
 
-create on server -- and install nginx in it
+create one server -- and install nginx in it
 in server's user data mention below commands --
 #!/bin/bash
 yum install nginx -y
@@ -127,7 +128,7 @@ openssl req -new -key private.pem -out csr.pem
 
 while creation it asks for  country name , state , locality , company name , company unit nam , common name(dns name) , email address , give password if u want , after giving all this information it will generate CSR
 
-command to create scr by using san.csf
+command to create csr by using san.csf
 openssl req -new -key private.pem -config san.cnf -out csr.pem
 
 CSR  -- certificate signing request -- contains -- public key signed by our private key + company info + validity + domain information
@@ -336,7 +337,7 @@ per account u can create one certificate only in zero ssl
 
 after downloading we will get private key & certificate & certificate chain (ca_bundle)
 
-when u enter some domain name in browser -- (root CA -- intermediate CAS -- certificate ) total chain will be validated
+when u enter some domain name in browser -- (root CA -- intermediate CA -- certificate ) total chain will be validated
 
 we need to copy these 3 into our server's /tmp folder
 

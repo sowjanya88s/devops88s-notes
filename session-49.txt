@@ -30,7 +30,7 @@ advantages
 ==========
 low maintainance
 less cost compared to individual houses
-just pay and joint
+just pay and join
 less time
 
 disadvantages
@@ -176,7 +176,7 @@ by using VMware only we can divide physical resources into logical units
 to manage hypervisor only we need to hire a team
 
 advantages in containerization
-here in cloud we need to instal docker no need to use VMware
+here in cloud we need to install docker no need to use VMware
 resource utilization is more in containers
 we can scale resources very fastly
 we need to address performance and security in containers

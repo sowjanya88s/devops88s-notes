@@ -1,3 +1,4 @@
+ 
 upto now, we r using docker hub to push the images
 later we use ECR to maintain images
 
@@ -331,7 +332,7 @@ kubectl exec -it env-demo -- bash
 env
 in output we can see env here also
 
-what if we have 50 key-value pairs in env section , the pod env section becomes lengthy & not readable , if anything changes we have to change the pod definition & we habe to restart the pod again
+what if we have 50 key-value pairs in env section , the pod env section becomes lengthy & not readable , if anything changes we have to change the pod definition & we have to restart the pod again
 for that we can use configmap 
 
 configmap

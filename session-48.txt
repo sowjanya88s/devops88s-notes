@@ -339,7 +339,7 @@ if mongodb crashes -- we can create instance and we can install mongodb -- but w
 so databases are stateful
 
 stateful -> state(data) is important. databases are stateful applications
-stateless -> backend and frontend applications created using programming languages are called stateless applications, we can easily even they crash
+stateless -> backend and frontend applications created using programming languages are called stateless applications, we can create them easily even they crash
 
 after creation of total infra  -- we will test the flow
 dummy R53 -> new frontend ALB -> new frontend -> new backend alb -> components -> db
@@ -405,5 +405,7 @@ terraform usual behaviour is -- deletes existing resource & create new resource 
 
 
 to format terraform code perfectly -- use --
+
 terraform fmt
+'
 

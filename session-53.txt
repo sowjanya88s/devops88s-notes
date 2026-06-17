@@ -9,7 +9,7 @@ it can build the images
 it can define the dependencies between the components
 it can start all the components at a time
 it can remove all the components at a time
-u can define network & volumesa also here
+u can define network & volumes also here
 so we can mention all these things in docker compose file
 it can make our job easy
 

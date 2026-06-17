@@ -505,7 +505,7 @@ kubectl apply -f manifest.yaml
 press d -- we can see error description
 
 check in k9s -- we can see cart container
-now goto bebug -- press s 
+now goto debug -- press s 
 curl http://cart:8080/health
 u can see cart is running
 
@@ -659,7 +659,7 @@ curl http://user:8080/health
 u can see user is up and communicating  
 don't delete deployments (by deleting deployment replica set will be deleted & we cannot rollback) just delete pods 
 
-now lets see shipping      
+    
 now lets see shipping      
 lets optimize the shipping docker file
 JDK JRE

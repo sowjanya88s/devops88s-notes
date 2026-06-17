@@ -216,6 +216,8 @@ when u give terraform apply command again -- a new instance will be created for 
 we will use terraform apply when there is a new production release
 mention app_version in vars of catalogue or ansible-roboshop-roles-tf -- group_vars -- all.yaml
 by this we can override this version when we want 
+
+
 while configuring instance with bootstrap.sh mention app_version also & create variable app_version & mention that in bootstrap file also
 
 if we don't change the version also -- it applies again because terraform does not knows about versions -- it compares current infra with state file
@@ -231,7 +233,7 @@ instead of catalogue use variable component, use the same module for front end a
 create component variable
 
 in our roboshop architecture -- create frontend alb in public subnet , we can place frontend in private subnet
-the only difference between frontend and backend is post number and health checks 
+the only difference between frontend and backend is port number and health checks 
 
 in terraform resources names mention name as main & refer it as main (in resource names variables won't work)
 use port_number variable & use health check path variable

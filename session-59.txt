@@ -3,7 +3,7 @@ running inside k8s as manifest files
 
 liveness probe -- once the application is live , it will keep on check whether the application is healthy or not
 startup probe -- application is ready to accept the traffic or not
-readiness probe -- application is ready to accept the traffic or not
+readiness probe -- time taken to start the application 
 sequence -- 1.startup robe -- 2.readiness probe -- 3.liveness probe
 
 we already have MySQL image -- build it as MySQL:1.4.0
@@ -88,7 +88,7 @@ increase cpu limit upto -- 200m
 increase ram upto -- 256Mi
 
 lets see RabbitMQ config --
-we just used RabbitMQ image docker hub , so mention RabbitMQ image as RabbitMQ:3
+we just used RabbitMQ image from docker hub , so mention RabbitMQ image as RabbitMQ:3
 write RabbitMQ username & password in configmap
 open k8s-roboshop -- create RabbitMQ repo --
 manifest.yaml
@@ -315,7 +315,7 @@ commands --
 kubectl apply -f payment/manifest.yaml
 
 login to debug & run --
-curl http://localhost:8080/health
+curl http://payment:8080/health
 u can see its ok
 
 now lets optimize frontend image
@@ -324,7 +324,7 @@ nginx expects several directories -- while running as non root user -- check ngi
 search -- nginx non root docker image
 use nginx alpine image 
 remove default nginx.conf 
-when we pull nginx the application will run by using nginx user mentioned in nginx.conf, so there is no need to create roboshop user
+when we pull nginx ,the application will run by using nginx user mentioned in nginx.conf, so there is no need to create roboshop user
 
 Dockerfile
 ==========
@@ -642,13 +642,13 @@ k8s volumes
 1. static provisioning
 2. dynamic provisioning
 by creating EBS/EFS we can mount these volumes to cluster
-in this process there will be no problem even if we create clusters & pods -- we can create the new cluster & add the data here
+in this process there will be no problem even if we delete clusters & pods -- we can create the new cluster & add the data here
 volumes are cluster level
 
 k8s has 2 types of roles
 1. admin role
 2. project role
-if ur devops engineer for roboshop project , u can't get entire admin access , we can get access to ur roboshop namespace
+if u r devops engineer for roboshop project , u can't get entire admin access , we can get access to ur roboshop namespace
 RBAC -- role based access control
 to do anything at cluster level , we need admin access
 we furtherly discuss about administrator access

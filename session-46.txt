@@ -604,7 +604,8 @@ final check list
 3.ansible roles host urls
 4.check nginx configuration 
 
-inrepo where u use module refer module's GitHub https url  we have to send component name & priority 
+in repo where u use module refer module's GitHub https url  
+we have to send component name & priority 
 now create one repo in roboshop-infra -- 90-components
 use for loop to define components (map data type) along with their priority values
 in components variable mention catalogue , cart , user , shipping , payment , frontend 
@@ -683,7 +684,7 @@ this will create catalogue , user , cart, shipping , payment , frontend instance
 frontend runs with nginx on port 443
 backend_alb , frontend_alb runs on 80 as alb(application load balancer)
 
-first create catalogue instance and try to connect
+first create frontend instance and try to connect
 https://frontend-dev.sowjanya.fun -- we r not able to see components
 
 

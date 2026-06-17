@@ -15,7 +15,7 @@ docker client connects with docker daemon
 docker daemon == docker software running
 
 when we give ,
-docker run nginx -- docker daemon checks checks whether nginx is available in local or not
+docker run nginx -- docker daemon checks................................................. whether nginx is available in local or not
 if available it creates container out of it & shows to client
 if not available pulls form hub, store it in local , create container & shows to client
 
@@ -266,7 +266,7 @@ after doing installation on it -- size increases -- 1.78 GB -- this is huge
 for minimal images -- use alpine images , use official images only
 docker pull alpine
 docker images -a
-alpine:latest size - 12.7 GB
+alpine:latest size - 1.27 GB
 alpine is one of the Linux os
 
 node:20 is built on ubuntu/Debian , so its size is 1.58 GB
@@ -276,7 +276,7 @@ open roboshop-docker -- catalogue --
 Dockerfile
 ===========
  FROM node:20.20.2-alpine3.23
- this creates /app and move there
+ #this creates /app and move there
  WORKDIR /app
  COPY package.json .
  COPY *.js .
@@ -461,7 +461,7 @@ in interviews -- when they ask for recently implemented best practices -- tell t
 1.0.0 -- major-version . minor-version . patch-version
 this is called semantic versioning
 
-consider current android version -- 20 -- ha defects
+consider current android version -- 20 -- has defects
 20.1 -- release publicly
 20.1.1 -- patch means -- version came for addressing defects
 

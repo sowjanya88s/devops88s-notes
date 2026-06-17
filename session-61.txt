@@ -1,0 +1,249 @@
+Ephemeral volumes (temporary)
+=============================
+1. config map as volume
+
+2. empty directory is a shared storage so we can configure it to multiple containers , used mostly for sidecar containers
+
+3. host path -- accesses underlying host (mention read only compulsarily)-- used for daemon set -- daemon set makes sure that pod replica runs on each and every node -- used for administration & used to collect logs & host level metrics
+
+ephemeral (permanent) volumes
+============================
+static provisioning
+dynamic provisioning
+
+two types of volumes -- EBS and EFS
+
+static provisioning
+===================
+pv -- physical representation of the underlying disk, it is equivalent k8s resource to the disk , we can work with pv to manage the disk
+
+pvc -- claiming the disk from pv
+
+sc -- part of dynamic provisioning , it creates disk and pv on behalf of us
+
+EBS
+===
+static provisioning -- steps
+============================
+1. install EBS drivers
+2. attach EBS IAM role to the instance
+3. create disk
+4. create pv and pvc
+5. mount volume in pod
+
+ec2 -- volumes -- create volume in same az as node
+
+dynamic provisioning -- steps
+==============================
+1. install EBS drivers
+2. attach EBS IAM role to the instance
+3. create storage class
+4. create pvc and pod
+
+if EBS volume should be in same az as server
+in pod we have mentioned az of disk , we r telling to create pod in same az as disk
+
+for authentication use below command --
+aws eks update-kubeconfig --region us-east-1 --name roboshop(<cluster-name>)
+
+kubectl get nodes
+
+install drivers -- search -- ebs csi drivers
+kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.61"
+
+add iam role to node -- select node -- redirects to iam role --
+ eksctl-roboshop-nodegroup-spot-NodeInstanceRole-<id> -- attach policies -- ebs csi driver policy
+
+EBS vs EFS
+===========
+1. EBS is like HD , EFS is like drive following NFS
+(network file sharing) protocol
+2. EBS should be in same AZ but EFS can be anywhere in network
+3. EBS is faster than EFS
+4. EBS is suitable for OS and DB, EFS is suitable to store some files
+5. EBS is fixed size but EFS can grow automatically(EFS files can grow upto 47.9 TB)
+6. in EBS we can select file system type , EFS is set to NFS
+7. in EBS SG is not required, EFS needs SG
+
+EFS static provisioning
+=======================
+1. install drivers
+2. Add IAM role
+3. Create file system
+4. make sure filesystem SG allows 2049(NFS port)
+5. create pv, pvc and pod
+
+search -- EFS csi drivers -- (check compatible version)
+kubectl kustomize \
+    "github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/ecr/?ref=release-2" > private-ecr-driver.yaml
+
+after execution, above command creates one file with name 
+private-ecr-driver.yaml
+
+kubectl apply -f private-ecr-driver.yaml
+
+if version is not compatible use below commands for deletion --
+kubectl delete -f private-ecr-driver.yaml
+
+if error came remove driver --
+rm private-ecr-driver.yaml
+
+verify --
+kubectl get pods -n kube-system
+
+now select node -- select its iam role -- attach policies -- efs csi policy
+
+open efs -- create file system -- 
+name -- roboshop
+select ur vpc -- eksctl-roboshop-cluster -- create
+
+open filesystem -- network-- u can find sg id
+open sg of filesystem -- allow cluster node sg here -- 2049 -- save rules
+
+write code for creation of pv , pvc , pod
+copy volume id from NFS & place in volume Handle of pv definition
+
+open vsc -- 
+06-efs-static.yaml
+==================
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: efs-static
+spec:
+  capacity:
+    storage: 5Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: "" # sc should be empty for static provisioning
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: efs.csi.aws.com
+    volumeHandle: fs-0a8330c590e1ba326
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-static
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+    volumeMounts:
+    - name: html-data
+      mountPath: /usr/share/nginx/html
+  nodeSelector:
+    topology.kubernetes.io/zone: us-east-1d
+  volumes:
+  - name: html-data
+    persistentVolumeClaim:
+      claimName: efs-static
+
+
+
+kubectl apply -f 06-efs-static.yaml
+kubectl get pv
+kubectl get pods
+kubectl get pod app
+kubectl describe pod app
+kubectl describe pv efs-static
+
+the pod should run successfully and efs should be mounted successfully
+
+after deleting efs-static don't delete the disk also , use the same disk for dynamic provisioning
+to save some files related to catalogue we should create access point in EFS
+
+EFS dynamic provisioning
+========================
+create storage class , mention file system id in it , mention base path
+pvc approaches storage class then it creates disk
+one access point will be created in file system after creation of pvc
+access points gets deleted automatically because we have mentioned reclaim policy as delete
+
+07-efs-sc.yaml
+==============
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: roboshop-efs
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: fs-0a74f07d59bf6910a
+  directoryPerms: "700"
+  basePath: "/roboshop"
+
+08-efs-dynamic.yaml
+===================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-dynamic
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: roboshop-efs
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: efs-app
+spec:
+  containers:
+    - name: nginx
+      image: nginx
+      volumeMounts:
+        - name: html-data
+          mountPath: /usr/share/nginx/html
+  volumes:
+    - name: html-data
+      persistentVolumeClaim:
+        claimName: efs-dynamic
+
+
+kubectl apply -f 07-efs-sc.yaml
+
+kubectl get sc
+
+kubectl describe sc roboshop-efs
+
+kubectl describe pvc efs-dynamic
+
+u can see sc with name roboshop-efs
+
+after completion , access point will be created for storing pod data
+
+load balancer -- EKS manages node group -- frontend service -- pods -- backend (for every backend there will be a service)
+
+if ur application is stateful -- use stateful set
+if ur application is stateless -- use deployment
+
+for stateful set we need volume
+
+
+
+
+
+
+
+
+
+
+
+

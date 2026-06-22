@@ -1,0 +1,549 @@
+before deleting the cluster delete efs volume
+
+instances only accepts traffic from Load balancer
+deployment is for stateless applications, data storage is not required
+
+statefulset
+===========
+used for stateful applications where data storage is important
+application hits MySQL database cluster
+MYSQL db cluster maintains some replicas for MYSQL server , each replica contains one own disk
+generally DB gets more read instructions
+for ex catalogue, it gets more read requests, so we maintain read replicas more & less replicas for write operations
+when one update or write request came on write replica, this should be updated on remaining replicas in the cluster , this activity should be done by DB admins(Data sync)
+to update anything on other replicas , that write replica should know other pod ip's , for this we need headless service
+
+
+1. pod names are standard in statefulset , to keep the pod identity same( names will be created like mysql-0 , mysql-1, mysql-2 etc) , deployment pod name are random
+
+2. pods in statefulset are created in order (firstly it created mysql-0 and attaches volume to it, and then mysql-1 and attches volume to it , because by creating all simultaneously if anything fails, cluster will be failed)
+pods will be deleted in reverse order. in deployment pods creation & deletion is random
+
+3.pod in statefulset have its own disk. pods in deployment have shared disk
+
+4. statefulset should have pv , pvc is mandatory. in deployment pv, pvc is not mandatory
+
+5. statefulset requies headless service to find other nodes in the cluster when data replication is required , deployment does not require headless service
+
+6. statefulset pods will have same identity
+
+a service with cluster ip none is called headless service
+
+open k8-resources -- create one file 
+for frontend create deployment & service for it
+
+17-deployment.yaml
+===================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    purpose: rs-demo
+    tier: frontend
+    component: frontend
+  annotations:
+    kubernetes.io/change-cause: "moving to 1.29.7"
+spec:
+  replicas: 4
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      purpose: rs-demo
+      tier: frontend
+      component: frontend
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        purpose: rs-demo
+        tier: frontend
+        component: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.29.7
+---
+apiVersion: v1  #service
+kind: Service
+metadata:
+  name: nginx
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    component: frontend
+  ports:
+  - protocol: TCP
+    port: 80 # servie port
+    targetPort: 80 # container port
+---
+apiVersion: v1   #headless service
+kind: Service
+metadata:
+  name: nginx-headless
+spec:
+  clusterIP: None #mandatory
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    component: frontend
+  ports:
+  - protocol: TCP
+    port: 80 # servie port
+    targetPort: 80 # container port
+
+cd k8-resources
+kubectl apply -f 17-deployment.yaml
+
+4 replicas will be created for nginx -- 
+
+now create one pod for debug -- 
+kubectl apply -f 04-labels.ymal
+
+to know the os of pod --
+cat /etc/*release
+
+login to that pod
+now install nslookup command --
+apt install dnsutils
+
+now check --
+nslookup nginx
+we can see one ip address i.e cluster ip address
+
+but in statefulset they have designed headless service, which means if we try to access one pod's ip address we will see remaining pod's ip address
+
+now create headless service for nginx , in that mention cluster ip as none & service names as headless service & apply it
+
+kubectl apply -f 17-deployment.yaml
+
+by this nginx -headless service will be created & u cannot see cluster ip for this
+
+now login to debug pod --
+nslookup nginx-headless
+we can see pods ip addresses
+
+lets configure the roboshop project again by creating statefulset for databases
+
+now create one repo -- k8-roboshop-volumes
+create mongodb repo here
+
+create statefulset & headless service & attach this service to statefulset  then only it can do nslookup in the background and mention cluster ip as none 
+headless service is used to identify the other pods in the cluster
+create service for mongodb this is used for Load balancing
+statefulset definition contains pvc also , so we have to configure EBS
+install drivers , IAM role creation for instances , create storage class
+
+install drivers in cluster
+
+mention storage class name in pvc
+
+now create namespace, storage class first
+
+k8-roboshop-volumes -- 01-namespace.yaml
+========================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: roboshop
+  labels:
+    project: roboshop
+    environment: dev
+    purpose: poc
+
+04-ebs-cs.yaml
+==============
+# SC is admin task
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: roboshop-ebs
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+mongodb -- manifest.yaml
+========================
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  clusterIP: None
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: db
+    component: mongodb
+  ports:
+  - protocol: TCP
+    port: 27017 # servie port
+    targetPort: 27017 # container port
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: roboshop
+  labels: 
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  selector:
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: mongodb
+  serviceName: "mongodb-headless" # we should attach headless service
+  replicas: 3
+  #replicas: 1 # by default is 1
+  # Pod definition
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: joindevops/mongodb:1.0.0
+        volumeMounts:
+        - name: mongodb
+          mountPath: /data/db
+  # PVC
+  volumeClaimTemplates:
+  - metadata:
+      name: mongodb
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "roboshop-ebs"
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: db
+    component: mongodb
+  ports:
+  - protocol: TCP
+    port: 27017 # servie port
+    targetPort: 27017 # container port
+
+
+cd k8-roboshop-volumes/
+kubectl apply -f 01-namespace.yaml
+kubectl apply -f 04-ebs-sc.yaml
+cd mongodb/
+kubectl apply -f manifest.yaml
+u can see containers & its disks will be created one by one as mongodb-0 , mongodb-1 , mongodb-2
+goto aws console -- check volumes -- in description u can see container references in volumes as mongodb-mongodb-0
+during deletion they will be deleted in reverse order
+statefulset means same pod identity -- incase in future if one pod is crashed, if u create that pod again that will be attached to same disk again
+
+search -- MySQL cluster in Kubernetes
+in real projects we don't keep primary databases
+if one MySQL pod gets write request , it should tell that information to other pods -- generally in projects this config will be done by database admins 
+we cannot see the same data in all replicas with what we have done now
+try with 3 replicas for understanding 
+
+now lets discuss about one more topic by using catalogue
+consider that we got more requests on catalogue -- pods are not enough  
+we need to do auto scaling
+autoscaling is two types
+1. horizontal scaling
+2. vertical scaling
+
+vertical scaling
+================
+consider that we have a server with this config -- 1GB RAM, 8GB HD, 2 cpu's -- these are not enough
+we need to increase the resources
+for that we have to stop the server, increase the resources, restart the server
+in this process,
+1. there will be downtime
+2. single point of failure
+even if we increase the resources , if there is a problem in server -- all workloads will be stopped
+
+horizontal scaling
+==================
+u don't increase resources in single server, instead we create replicas
+1. no downtime 
+2. no single point of failure
+
+k8s introduced horizontal pod auto scalar -- to implement horizontal scaling
+in horizontal pod auto scaler -- horizontal pod auto scaler connects to deployment resource , horizontal pod auto scaler checks average cpu utilization of pods connect to deployment, if avg cpu utilization increases then it will create the replicas
+
+conditions for horizontal pod auto scaler
+=========================================
+1. u must configure resource limits
+2. there should be metric server running (during creation of k8s cluster -- metric server will be created -- this is an addon in k8s cluster)
+3. 
+
+if avg cpu utilization > 20 -- create replicas , it can create upto 10 replicas
+
+create repo -- catalogue --
+manifest.yaml
+=============
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+data:
+  MONGO: "true"
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  replicas: 1
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: catalogue
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: catalogue
+    spec:
+      containers:
+      - name: catalogue
+        image: joindevops/catalogue:1.4.0
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: catalogue
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: catalogue
+  ports:
+  - protocol: TCP
+    port: 8080 # servie port
+    targetPort: 8080 # container port
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: catalogue
+  namespace: roboshop
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: catalogue
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 20
+
+cd catalogue
+kubectl apply -f manifest.yaml
+
+lets increase cpu utilization
+goto roboshop namespace --
+kubens roboshop
+
+login to one pod --
+kubectl exec -it mongodb-0 -- bash
+
+install curl in it --
+apt update
+apt install curl 
+
+push some load on it --
+while true; do curl http://catalogue:8080/health; done
+
+by this cpu utilization increases in catalogue
+by this u can see replicas will be created upto 10
+
+while deletion delete the pvc's (they doesn't gets deleted because retention policy is retain) and then delete the volumes
+
+kubectl get pvc
+kubectl delete pvc <pvc-name>
+
+if stop the loop, consumption decreases, deletes the pods
+
+consider this as assignment & create remaining db's and components & mention replicas as one 
+if u mention multiple replicas while reading data from database there is a chance of going to another database , then u can see error like no user found even if u created the user
+
+lets discuss about selectors , we are selecting node to launch the pod
+now we are learning how to control the scheduler to schedule the pods
+
+taints and tolerations
+=======================
+taint means paint
+if u taint a node, it means Kubernetes scheduler will not schedule any pod in that node
+
+in which cases we should taint a node?
+1. we reserve that node to other special workloads
+2. may be we can attach GPU node to the cluster, we reserve that for AI/ML workloads
+3. DB may accept connections from specific IP, we only send the pods that connects to DB in tainted node
+
+toleration means excuse
+
+syntax to taint a node --
+kubectl taint nodes node1 key1=value1:NoSchedule
+in above command NoSchedule is called as effect
+
+effects
+========
+1. NoSchedule -- no new pods will be scheduled on the tainted node
+
+2. PreferNoSchedule -- PreferNoSchedule is a preference or soft version of NoSchedule ( means try not to schedule the incoming pods , so scheduler may schedule)
+
+3. NoExecute -- don't schedule new pods and evict existing pods
+this affects pods that are already running on the node as follows:
+pods that do not tolerate the taint are evicted immediately
+pods that tolerate the taint without specifying tolerationSeconds in their toleration specification remain bound forever
+pods that tolerate the taint with specifying tolerationSeconds remain bound for the specified amount of time. after that time elapses, the node lifecycle controller evicts the pods from the node -- 1:10 mins
+
+syntax to taint a node --
+kubectl taint nodes <node-name> <key>=<value>:<effect>
+lets taint a node
+kubectl get nodes
+kubectl taint nodes <node-name> project=roboshop:NoSchedule
+
+create new repo -- k8-selectors
+now lets create one pod in default namespace
+
+k8-selectors -- 01-pod.yaml
+===========================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  
+cd k8s-selectors
+kubectl apply -f 01-pod.yaml
+
+now the pod will not be created in tainted node
+
+if u want to create the pod in tainted node -- apply some toleration at that pod level
+
+02-toleration.yaml
+==================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-tolerated
+  labels:
+    env: test
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  tolerations:
+  - key: "project"
+    operator: "Equal"
+    value: "roboshop"
+    effect: "NoExecute"
+
+
+in toleration we have to mention the taint what we have applied to a node
+
+kubectl apply -f 02-toleration.yaml
+
+kubectl get pods -o wide
+
+delete the pod & try again
+
+kubectl delete -f 02-toleration.yaml
+
+kubectl get pods -o wide
+
+
+this pod will be created in non-tainted node , because even if we added toleration there is no gurantee that scheduler will create the pod in tainted node
+toleration is -- reservation & node-affinity -- confirmation
+if u want to create pod in tainted node -- use node affinity
+
+we will mention replicas in deployment also so initially it creates replicas according to that
+later autoscaler calculates the load on pods and then manages the replicas
+if u did not mentioned replicas in deployment -- creates no of replicas mentioned in auto scaler
+
+
+

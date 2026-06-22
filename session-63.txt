@@ -1,0 +1,534 @@
+scheduler -- how u control the pod scheduling , there will be a component called scheduler in master node
+
+if u want to schedule the pod we have to use node selectors
+
+search -- node selector
+
+labels and selectors
+====================
+here we can assign labels to node, and ask scheduler to select the node based on this label
+
+command for authentication to cluster --
+aws eks update-kubeconfig --region us-east-1 --name roboshop
+
+we can assign label to npde and ask scheduler to select the node based on label
+search -- assigning label to node Kubernetes
+
+kubectl get nodes --show-labels
+we can see default labels of nodes in output
+
+command to create label to node --
+kubectl label nodes <node-name> project=roboshop
+
+while scheduling the pod , mention node selector and node labels in it at container level
+
+k8-selectors -- 01-pod.yaml
+===========================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  nodeSelector:
+    project: roboshop
+
+kubectl apply -f 01-pod.yaml
+kubectl get pods -o wide
+
+when pods will goto pending state --
+1. if specified node does not contains resources 
+2. if pod is not able to mount the volume
+
+taints and tolerations
+======================
+if u taint the node, k8s will not schedule any pod on to that node
+1. project specific hardware 
+2. any specific workloads like database accept only from specific ip
+
+in our project if AI/ML workloads are running, we will add GPU's to the k8s cluster , there we don't run normal pods , we will run only AI/ML pods , for that purpose we taint the nodes
+
+how goto into a tainted node?
+if we want our pod on to tainted node, then we should use toleration , toleration will not gurantee pod scheduling
+1. we need to select the node
+2. toleration acts as exception/reservation to that node
+
+there are some strategies here --
+NoSchedule -- don't schedule incoming pods
+NoExecute -- running pods should be evicted
+
+if u taint a node --
+kubectl label nodes <node-name> project=roboshop:NoExecute
+running pods in this node will be evicted
+then this pod goes to scheduler and asks scheduler to schedule it somewhere else
+now check pod status--
+kubectl get pods
+kubectl create -f 01-pod.yaml
+now u can see the pod in pending state
+
+to make this pod schedule, we need to add toleration & node selector
+by adding above two , k8s scheduler will place the pod into selected node
+
+in toleration section mention effect as NoExecute because we have used the same strategy while tainting the node
+
+02-toleration.yaml
+==================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-tolerated
+  labels:
+    env: test
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  # asking for VIP room
+  nodeSelector:
+    project: roboshop
+  # showing booking confirmation
+  tolerations:
+  - key: "project"
+    operator: "Equal"
+    value: "roboshop"
+    effect: "NoExecute"
+
+kubectl apply -f 02-toleration.yaml
+kubectl get pods
+kubectl get pods -o wide
+
+what if we have multiple nodes tainted?
+for that we have to use node affinity , in node affinity we have multiple options and we have more control
+
+node affinity
+=============
+node selector does not have multiple options, just key value pairs. but affinity have more options. we can have operators In, NotIn, Exists, DoesNotExist, Gt, Lt etc
+
+requiredDuringSchedulingIgnoredDuringExecution -> hard rule. labels should match pod can't be scheduled
+
+preferredDuringSchedulingIgnoredDuringExecution -> soft rule. if label selectors are not matched, k8s considers another node to schedule
+
+command to untaint a node --
+kubectl taint nodes <node-name> project=roboshop:NoExecute-
+
+topology.kubernetes.io/zone=us-east-1c (we can see this in tags of a node) -- topology means we are telling k8s to consider this zone as border
+
+03-node-affinity.yaml
+=====================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-affinity
+  labels:
+    env: test
+spec:
+  affinity:
+    nodeAffinity:
+      # Hard Rule
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: topology.kubernetes.io/zone
+            operator: In
+            values:
+            - us-east-1d
+	    - us-east-1c
+   containers:
+   - name: nginx
+     image: nginx
+
+by above config k8s schedule the pod into any node in 1d & 1c
+
+kubectl apply -f 03-node-affinity.yaml
+kubectl get pods -o wide
+
+previously we have given label as project=roboshop to one node
+give label to another node project=amazon 
+
+flow
+consider that we have 3 nodes in 1d & 1c -- in that we have to filter again
+out 1st preference is pod should goto project=roboshop mention its weight as 100
+if resources are over in 1st preferred node , then give another node as 2nd preference with label project=amazon with weight 10
+
+lets see 2nd option --
+03-node-affinity.yaml
+=====================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-affinity
+  labels:
+    env: test
+spec:
+  affinity:
+    nodeAffinity:
+      # Hard Rule
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: topology.kubernetes.io/zone
+            operator: In
+            values:
+            - us-east-1d
+            - us-east-1c
+      # Soft Rule
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: project
+            operator: In
+            values:
+            - roboshop
+      - weight: 10
+        preference:
+          matchExpressions:
+          - key: project
+            operator: In
+            values:
+            - amazon
+  containers:
+  - name: nginx
+    image: nginx
+
+kubectl apply -f 03-node-affinity.yaml
+kubectl get pods
+kubectl get pods -o wide
+
+lets test another case, for example if we have given label value as roboshopp as roboshop then this pod will be scheduled in 2nd preferred node
+(i.e node with label project = amazon) 
+or if roboshop labled pod is full then pod will be scheduled in 2nd preferred node (i.e node with label project = amazon)
+
+Nodeantiaffinity   
+================
+by below program -- pod will not be scheduled in 1c
+pod will be scheduled in node with project label and its value is amazon
+
+04-node-antiaffinity.yaml
+=========================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-anti-affinity
+  labels:
+    env: test
+spec:
+  affinity:
+    nodeAffinity:
+      # Hard Rule
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: topology.kubernetes.io/zone
+            operator: NotIn
+            values:
+            - us-east-1c
+          - key: project
+            operator: NotIn
+            values:
+            - amazon
+  containers:
+  - name: nginx
+    image: nginx
+  tolerations:
+  - key: "hardware"
+    operator: "Equal"
+    value: "gpu"
+    effect: "NoExecute"
+  
+kubectl apply -f 04-node-antiaffinity.yaml
+kubectl get pods -o wide
+
+
+if u don't have pods in other regions the pod will goto pending state
+
+for affinity use in , antiaffinity use Notin
+
+lets taint a node --
+kubectl taint node <node-name> hardware=gpu:NoExecute
+
+now check pods --
+kubectl get pods -o wide
+
+u can't see pods here because,
+here i have nodes in 1c , this i have mentioned it as nodeantiaffinity, 
+another node i have tainted it as hardware=gpu:NoExecute
+to create pods in anyone of the nodes we have to use toleration
+
+untaint the node --
+another node i have tainted it as hardware=gpu:NoExecute-
+
+we select the node using affinity & antiaffinity
+
+pod affinity 
+============
+pods will be attracted with each other
+
+for example, in below program 1st pod is related to database ,this pod will be created in anyone of the node
+2nd pod is related to backend , we want pod-2 to run in the node where pod-1 is executing 
+
+05-pod-affinity.yaml
+=====================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-1
+  labels:
+    tier: database
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-2
+  labels:
+    tier: backend
+spec:
+  affinity:
+    podAffinity:
+      # Hard Rule
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: tier
+            operator: In
+            values:
+            - database
+        topologyKey: topology.kubernetes.io/zone
+  containers:
+  - name: nginx
+    image: nginx
+
+kubectl apply -f 05-pod-affinity.yaml
+
+antiaffinity
+============
+pods will not be attracted with each other
+
+for example, in below program 1st pod is related to database ,this pod will be created in anyone of the node
+2nd pod is related to backend , we want pod-2 should not run in the node where pod-1 is executing 
+
+for this there is dedicated antiaffinity module
+
+06-pod-antiaffinity.yaml
+========================
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-1
+  labels:
+    tier: database
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-2
+  labels:
+    tier: backend
+spec:
+  affinity:
+    podAntiAffinity:
+      # Hard Rule
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: tier
+            operator: In
+            values:
+            - database
+        topologyKey: topology.kubernetes.io/zone
+  containers:
+  - name: nginx
+    image: nginx
+
+kubectl apply -f 06-pod-antiaffinity.yaml
+kubectl get pods -o wide
+
+2 pods will be created in different nodes
+
+consider we have backend and cache
+if backend and cache are in same node then communication will be fast and this is called as affinity 
+2. if backend and cache are in different nodes then communication will be slow this is called as anti affinity
+
+we want application high availability , so create 3 replicas
+both backend & cache pods are there in all 3 replicas then high availability will be achieved
+implement backend to backend -- anti affinity
+implement cache to cache -- anti affinity
+implement cache to backend -- affinity 
+
+if we have 3 nodes , one cache pod will be created in each node
+if we have 3 nodes , one application pod will be created in each node
+
+07-use-case.yaml
+================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+spec:
+  selector:
+    matchLabels:
+      app: store
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: store
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - store
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: redis-server
+        image: redis:3.2-alpine
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-server
+spec:
+  selector:
+    matchLabels:
+      app: web-store
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: web-store
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - web-store
+            topologyKey: "kubernetes.io/hostname"
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - store
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: web-app
+        image: nginx:1.16-alpine
+
+kubectl create -f 07-use-case.yaml
+
+this type of implementation is required when u want a super-performing application
+
+in web-server if u give 5 replicas remaining 2 pods will be pending status because of antiaffinity
+if u want all 5 pods to be scheduled then mention preferred in DuringSchedulingIgnoredDuringExecution in podAntiAffinity , syntax changes here like below
+
+07-use-case.yaml
+================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+spec:
+  selector:
+    matchLabels:
+      app: store
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: store
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - store
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: redis-server
+        image: redis:3.2-alpine
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-server
+spec:
+  selector:
+    matchLabels:
+      app: web-store
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: web-store
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+	      labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - web-store
+            topologyKey: "kubernetes.io/hostname"
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - store
+            topologyKey: "kubernetes.io/hostname"
+      containers:
+      - name: web-app
+        image: nginx:1.16-alpine
+
+kubectl apply -f 07-use-case.yaml
+
+if u want cache & backend replica run on each and every node we can use daemon set & we should mention affinity
+
+node selector -- to simply select a node based on labels
+node affinity/node antiaffinity -- improved version of node selector
+pod affinity -- affinity towards pods
+pod antiaffinity -- repel towards pods
+ 
+strategies in affinity & anti affinity --
+preferredDuringSchedulingIgnoredDuringExecution
+requiredDuringSchedulingIgnoredDuringExecution
+
+if u have used all the options & node is tainted then u can use tolerations
+
+ignore during execution -- means 
+scheduler will schedules -- node executes pods
+in between these things if someone changes labels -- we are telling to ignore those changes
+

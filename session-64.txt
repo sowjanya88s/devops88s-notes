@@ -1,0 +1,676 @@
+in containerization , we are discussing about two things --
+how to build the images -- images are available in open source
+how to run the images -- we use manifest files to run images -- we can place these in open source after templatizing them -- i.e helm charts
+
+helm is an open-source project that is part of the cloud native computing foundation
+
+Helm charts
+===========
+1. we can use helm as package manager in k8s
+2. we can templatize the k8s manifest files
+
+open k8s-roboshop -- catalogue -- manifest.yaml
+in this manifest file,  frequently changing values are -- in deployment --  no.of replicas , image version , 
+nothing changes in service & configMap
+by changing values in large files , there is a chance of changing other values
+so templatize the values that are frequently changing , use place holders there & maintain their values separately
+this process will be used in automation like CI/CD
+
+now create a new git repo with name -- helm
+clone that repo to local
+
+helm is very powerful , simple and useful in automation
+
+install helm in workstation --
+
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+
+
+chmod 700 get_helm.sh
+
+./get_helm.sh
+
+helm version
+
+helm has important structure in that firstly we will see charts
+open helm documentation -- topics -- charts -- chart information , chart is nothing but application. chart contains name, api version, version, app version, description -- metadata about the chart
+charts means group of manifest files
+in chart.yaml -- required fields are apiVersion -- its related to k8s, in this v2 is the new version lets use v2
+name -- name of the chart , for example we are writing this chart for nginx so give name as nginx
+version -- mention version of chart , for ex we r giving version as 0.0.1
+appVersion -- which application we are going to deploy using helm is app , here we r deploying nginx so mention version of nginx here
+mention description -- useful when u change the version
+
+templates -- all k8s manifest files here with placeholders
+now create template folder in helm -- create deployment.yaml file in it & place deployment code in it
+here in value of replicas place template -- {{ .Values.deployment.replicas }}
+templatize the change-cause -- in value mention template -- {{ .Values.deployment.changeCause }}
+in nginx image version mention template -- {{ .Values.deployment.imageVersion }}
+
+
+create service.yaml -- place service code here
+spec -- type -- mention template -- {{ .Values.service.type }} 
+
+values.yaml -- we can maintain the placeholder actual values here
+create values.yaml in helm repo -- mention values of variables there
+we can maintain env specific values here in separate files -- values-dev.yaml, values-prod.yaml
+
+now create deployment section here, in that create replicas as key &  in value mention no.of replicas u want
+now create changeCause field here and write some description here
+create imageVersion variable and mention version here
+create service section , in type mention -- its type as load balancer
+
+
+open helm repo 
+helm -- Chart.yaml
+==================
+apiVersion: v2 # K8S related
+name: nginx
+version: 0.0.1 # This is chart version
+appVersion: latest # This is application version like catalogue version
+description: "upgrading to 1.29-trixie"
+
+helm -- values.yaml
+===================
+deployment:
+  changeCause: "installing latest version"
+  imageVersion: "latest"
+service:
+  type: LoadBalancer
+
+templates -- deployment.yaml
+=============================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    purpose: rs-demo
+    tier: frontend
+    component: frontend
+  annotations:
+    kubernetes.io/change-cause: {{ .Values.deployment.changeCause }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      purpose: rs-demo
+      tier: frontend
+      component: frontend
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        purpose: rs-demo
+        tier: frontend
+        component: frontend
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:{{ .Values.deployment.imageVersion }}
+
+templates -- service.yaml
+=========================
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-headless
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    component: frontend
+  ports:
+  - protocol: TCP
+    port: 80 # servie port
+    targetPort: 80 # container port
+
+now pull this repo into k8s workstation --
+cd helm
+
+command to install helm --
+helm install nginx .
+
+in place of dot we have to mention chart.yaml
+
+to see the list of the charts installed --
+helm list
+
+command to uninstall --
+helm uninstall nginx
+
+to install a new version -- change the imageVersion & changeCause
+values.yaml
+===========
+deployment:
+  changeCause: "installing 1.29-trixie version"
+  imageVersion: "1.29-trixie"
+service:
+  type: LoadBalancer
+
+open chart.yaml -- change appVersion 
+helm -- Chart.yaml
+==================
+apiVersion: v2 # K8S related
+name: nginx
+version: 0.0.2 # This is chart version
+appVersion: 1.29-trixie # This is application version like catalogue version
+description: "upgrading to 1.29-trixie"
+
+upgrade to new version --
+helm upgrade nginx .
+
+to see history --
+helm history nginx
+
+we can pass values form command line also -- will be useful during CI/CD
+we have to mention appVersion only in chart.yaml
+
+helm upgrade nginx --set deployment.imageVersion="1.29.8-trixie" --version 0.0.4 --description "upgrading to 1.29.8-trixie" .
+
+helm history nginx
+
+kubectl get pods
+kubectl get service
+in output take external ip and paste in in chrome -- u can see default page of nginx
+
+to go a step back --
+helm rollback nginx
+
+helm history nginx
+
+to go step1 --
+helm rollback nginx 1
+helm history nginx
+
+we will have code & configuration --
+code is same in all environments 
+configuration changes based on environments
+in values.yaml -- maintain default values which are same across all environments
+values-dev.yaml -- values for dev specific environment
+values-prod.yaml -- values for prod specific environment
+
+we can maintain different values --
+
+values-dev.yaml
+===============
+deployment:
+  replicas: "1"
+
+values-prod.yaml
+================
+deployment:
+  replicas: "4"
+
+
+if we didn't mention no.of replicas -- creates only one replica
+
+firstly uninstall the helm --
+helm uninstall nginx
+
+helm list
+
+helm upgrade nginx .
+
+if u don't know whether to install or upgrade use below command--
+helm upgrade --install nginx .
+
+to give specific values --
+helm upgrade --install nginx -f values-prod.yaml .
+kubectl get pods
+we can see 4 pods in output
+
+ helm upgrade --install nginx -f values-dev.yaml .
+kubectl get pods
+we can see 1 pods in output
+
+in any env it considers values.yaml bydefault
+
+lets implement roboshop project by using helm
+create a new git repo -- roboshop-helm 
+clone that repo to local -- 
+create one repo -- mongodb 
+chart name & application name are same
+for easy maintenance we creating separate repos for component
+give template in the value of template as -- {{ .Values.deployment.replicas }}
+give template at image name & version -- {{ .Values.deployment.imageName }}:{{ .Values.deployment.imageVersion }}
+mention template values in values.yaml
+
+
+roboshop-helm -- mongodb -- Chart.yaml
+======================================
+apiVersion: v2 # K8S Helm related
+name: mongodb
+version: 0.0.1 # This is chart version
+appVersion: 1.0.0 # This is application version like catalogue version
+description: "installing 1.0.0"
+
+
+roboshop-helm -- mongodb -- values.yaml
+========================================
+deployment:
+  replicas: "1"
+  imageName: "joindevops/mongodb"
+  imageVersion: "1.0.0"
+
+
+roboshop-helm -- mongodb -- templates -- deployment.yaml
+========================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: db
+      component: mongodb
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: db
+        component: mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: "{{ .Values.deployment.imageName }}:{{ .Values.deployment.imageVersion }}"
+
+roboshop-helm -- mongodb -- templates -- service.yaml
+=====================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: db
+    component: mongodb
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: db
+    component: mongodb
+  ports:
+  - protocol: TCP
+    port: 27017 # servie port
+    targetPort: 27017 # container port
+
+now apply this config --
+cd roboshop-helm
+kubectl create namespace roboshop
+kubens roboshop
+
+cd mongodb
+helm upgrade --install mongodb .
+kubectl get pods
+kubectl get svc
+kubectl get deployment
+
+if we want to apply changes , we need to make changes in values.yaml & Chart.yaml & apply the changes & create config
+
+lets see catalogue -- create catalogue repo
+roboshop-helm -- catalogue
+templatize the configmap -- mention its value in values.yaml
+if u r using this repo for different env's create separate files & mention separate values for configMap
+templatize the image name & version & replicas
+
+catalogue -- Chart.yaml
+========================
+apiVersion: v2 # K8S Helm related
+name: catalogue
+version: 0.0.1 # This is chart version
+appVersion: 1.0.0 # This is application version like catalogue version
+description: "installing 1.0.0"
+
+catalogue -- values.yaml
+========================
+configMap:
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+deployment:
+  replicas: "1"
+  imageName: "joindevops/catalogue"
+  imageVersion: "1.0.0"
+
+catalogue -- templates -- configmap.yaml
+========================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+data:
+  MONGO: "true"
+  MONGO_URL: {{ .Values.configMap.MONGO_URL }}
+
+catalogue -- templates -- deployment.yaml
+==========================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: roboshop
+  # these labels are replicaset labels
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    # using these labels replica set selects the pod
+    matchLabels:
+      project: roboshop
+      tier: backend
+      component: catalogue
+  # This is pod definition, pod is subset of replicaset
+  template:
+    metadata:
+      labels:
+        project: roboshop
+        tier: backend
+        component: catalogue
+    spec:
+      containers:
+      - name: catalogue
+        image: "{{ .Values.deployment.imageName }}:{{ .Values.deployment.imageVersion }}"
+        imagePullPolicy: Always # safe to pull everytime, there may be images with same version rebuilt and pushed
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
+        readinessProbe:
+          # httpGet:
+          #   path: /health
+          #   port: 8080
+          tcpSocket:
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+          initialDelaySeconds: 15
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          failureThreshold: 2
+          periodSeconds: 10
+        envFrom:
+        - configMapRef:
+            name: catalogue
+
+
+
+catalogue -- templates -- service.yaml
+======================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue
+  namespace: roboshop
+  labels:
+    project: roboshop
+    tier: backend
+    component: catalogue
+spec:
+  selector:
+    # labels are used as selectors
+    project: roboshop
+    tier: backend
+    component: catalogue
+  ports:
+  - protocol: TCP
+    port: 8080 # servie port
+    targetPort: 8080 # container port
+
+
+catalogue -- values-dev.yaml
+============================
+configMap:
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+
+
+catalogue -- values-prod.yaml
+============================
+configMap:
+  MONGO_URL: "mongodb://mongodb:27017/catalogue"
+
+
+helm update --install catalogue .
+kubectl get pods
+kubectl get svc
+kubectl get deployment
+
+to change the image version on command line --
+helm upgrade catalogue --set deployment.imageVersion=1.4.0 --version 1.0.0 --description "upgrading to 1.4.0"
+
+helm history catalogue
+
+to check current version --
+kubectl get deployment catalogue -o yaml
+
+to go to previous version --
+helm rollback catalogue
+
+kubectl get deployment catalogue -o yaml
+ 
+-o -- output
+now changing the version become easy
+
+in CICD -- flow will be like build image, push image, run helm command, check app is running fine or not, if not rollback
+
+in k8s & helm -- we can do deployments fastly  
+
+package manager 
+===============
+for example EBS drivers & EFS drivers -- their images are available online and the instruction to run those are also available online nothing but hel repos
+
+search -- EBS drivers install
+u can find GitHub repos there
+open repo -- doccs -- images -- install.md -- u can see documentation
+by adding those repos we can get helm charts related to them --
+helm repo add aws-ebs-csi-driver https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+
+just like dnf install -- we are updating helm repo 
+helm repo update
+
+in charts -- aws-ebs-csi-driver -- templates -- we can find all the resources here
+these are all manifest files
+ 
+install the latest release of driver --
+helm upgrade --install aws-ebs-csi-driver \
+    --namespace kube-system \
+    aws-ebs-csi-driver/aws-ebs-csi-driver
+
+we r installing aws-ebs-csi-driver with name aws-ebs-csi-driver into kube-system namespace
+repo is aws-ebs-csi-driver , manifest files -- aws-ebs-csi-driver
+
+check --
+helm list -n kube-system
+we can see aws-ebs-csi-driver
+
+we can install any opensource software , Grafana/Prometheus are opensource
+we can use official helm repos & we can use values.yaml to change or override
+
+search -- helm install grafana
+installing grafana into monitoring namespace --
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm repo update
+helm search repo grafana-community/grafana
+
+
+accessing grafana --
+we have to allow some config to allow graphana to public because we are using private cluster
+
+open https://grafana-community.github.io/helm-charts -- charts -- Grafana -- templates -- values.yaml
+search -- service -- they are using cluster ip service
+
+create monitoring namespace --
+kubectl create namespace monitoring
+
+lets try by giving load balancer --
+helm upgrade --install roboshop-grafana grafana-community/grafana --set service.type=LoadBalancer --namespace monitoring
+
+in output u can see -- get ur admin user password by running -- use that command --
+kubectl get secret --namespace monitoring roboshop-grafana -o jsonpath="{data.admin-password}" | base64 --decode ; echo
+in output u can see password
+
+kubectl get svc -n monitoring
+copy external ip from there & open that in browser
+u can see Grafana login page -- username -- admin , password -- previous command output & click on login -- u can see Grafana dashboard
+
+uninstalling grafana --
+helm uninstall roboshop-grafana -n monitoring
+
+we have installed open source software simply 
+so this is called package manager
+
+practice remaining components in roboshop by using helm charts
+
+helm is actually submitting values to manifest files -- called as templatizing
+helm as package manager -- without config we can easily install application but we have to check values.yaml properly before that
+
+in interviews tell that u have migrated application to helm & u r using helm commands in CI/CD pipelines , we can easily do rollback using helm
+
+upto now we have accessed roboshop using admin access
+user who created eks cluster by default gets admin access
+but in projects devops engineer for roboshop project -- admin access to roboshop namespace
+
+verbs (actions) , Nouns (resources)
+to control we need authentication (prove ur identity) & authorization (scan ur id at ODC)
+generally we have -- user & group 
+resources -- pod, deployment, configmap etc
+actions -- create pod, list pod, watch pod, update, delete etc
+api group -- an api group have multiple resources, u can perform multiple actions on resources
+resources are grouped for better maintenance
+we will check -- user access to api group, on which resource , he can do what types of actions
+
+trainee -- only read access
+junior engineer -- read access & core deployment write access
+senior engineer -- full access to app/v1 group
+TL -- roboshop namespace -- all api groups, all resources, all actions
+here trainee is role , we will bind to users through role binding
+for ex, suresh user has trainee role
+
+Kubernetes -- opensource paas (platform as a service) -- it has its own authentication mechanism
+using separate authentication mechanism for aws & k8s is not good
+aws taken this k8s and placed into aws & made some changes -- we can integrate IAM user to EKS
+if we have access key & secret access key -- by using them we can authenticate to EKS
+authorization is handled by EKS & authentication is handled by IAM
+
+in k8s we have two types of resources -- namespace level , cluster level
+to give access to namespace level resources -- we have to use role & role binding
+to give access to for cluster level resources -- we have to use cluster-role & cluster-role binding
+
+roboshop devops engineer sends a mail to k8s admin -- create roboshop namespace & give access to us
+
+meanwhile we login to roboshop-eks-client server --  install kubectl -- run their workloads
+
+search -- rbac k8s
+
+RBAC -- Role Based Access Control
+=================================
+
+1. in below example we r giving role access for default namespace , in core api group, for pods we r giving get, watch, list permissions
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: pod-reader
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+
+
+2. in below example we r giving cluster role access for a secret, in an api group, 
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  # "namespace" omitted since ClusterRoles are not namespaced
+  name: secret-reader
+rules:
+- apiGroups: [""]
+  #
+  # at the HTTP level, the name of the resource for accessing Secret
+  # objects is "secrets"
+  resources: ["secrets"]
+  verbs: ["get", "watch", "list"]
+
+3. role-binding -- binding user with role
+
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: RoleBinding
+metadata:
+  name: read-pods
+  namespace: default
+subjects:
+# You can specify more than one "subject"
+- kind: User
+  name: jane # "name" is case sensitive
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: Role #this must be Role or ClusterRole
+  name: pod-reader # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+
+
+4. cluster role binding -- 
+
+apiVersion: rbac.authorization.k8s.io/v1
+# This cluster role binding allows anyone in the "manager" group to read secrets in any namespace.
+kind: ClusterRoleBinding
+metadata:
+  name: read-secrets-global
+subjects:
+- kind: Group
+  name: manager # Name is case sensitive
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: secret-reader
+  apiGroup: rbac.authorization.k8s.io
+
+we will see these things in next class
+
+in companies they maintain separate clusters for different env's
+in small companies they use different namespaces for for different environments
+
+search -- package mangers in k8s
+glasskube -- newer open source package manger designed to simplify the installation & updating k8s operations & applications with a focus on ease of use
+
+kustomize -- a builtin k8s tool that uses a declarative approach to customize yaml configurations without templates
+
+
+
+ 
+

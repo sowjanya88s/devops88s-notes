@@ -1,0 +1,559 @@
+RBAC
+=====
+K8s is platform as a service -> it has its own authentication and authorisation mechanism. but we can integrate this with IAM for authentication and authorisation can be managed in EKS
+
+check rbac-part1 diagram,
+in our aws account, we have IAM & EKS
+create one user in IAM & to connect to EKS cluster user should have cluster describe permissions & for this attach policy -- this policy should be eks cluster describe 
+in EKS , we have to integrate this user to AWS authentication configmap in EKS, 
+for authorization we need to create role & role binding
+role is used to give certain permissions to resources in api-group
+we should update role info in configmap
+
+yesterday we have discussed about 
+api-groups --> contains resources --> on that we can perform actions
+
+now create eks cluster --
+
+1. creation of user & attach policy
+open IAM -- create user & assign cluster describe policy
+create user -- name -- sowjanya
+set permissions -- attach policies directly -- roboshopeksclusterdescribe -- next -- create user
+
+create policy -- select a service -- EKS -- actions allowed -- read -- Describe Cluster -- 
+resources -- specific -- specify ARN's -- 
+resource in -- this account
+resource cluster name -- roboshop
+resource ARN -- paste cluster arn -- add ARN's
+policy name -- roboshopeksclusterdescribe -- create policy
+
+open amazon elastic Kubernetes service -- clusters -- roboshop -- overview -- copy cluster arn from here
+
+2. creation of role & role binding
+search -- rbac role
+
+create new git repo -- k8-rbac --
+create new file & write definition to create role for roboshop-trainee
+in role mention namespace & name of the role & api group & resources the role can access & actions that role can perform on resources
+
+01-role.yaml
+============
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: roboshop
+  name: roboshop-trainee
+# permissions
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+
+
+next create role binding, in that mention name of role binding & namespace & mention IAM username  -- here we are binding IAM user -- suresh with role (roboshop-trainee) using roleRef definition 
+
+02-role-binding.yaml
+====================
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: RoleBinding
+metadata:
+  name: roboshop-trainee
+  namespace: roboshop
+subjects:
+# You can specify more than one "subject"
+- kind: User
+  name: suresh # "name" is case sensitive
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: Role #this must be Role or ClusterRole
+  name: roboshop-trainee # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+
+now connect to k8s-workstation --
+cd k8-rbac
+kubectl create namespace roboshop
+kubectl apply -f 01-role.yaml
+kubectl get roles -n roboshop
+
+kubectl apply -f 02-role-binding.yaml
+kubectl get rolebinding -n roboshop
+
+
+3. map IAM user to k8s user --
+now we have to integrate -- for that we need aws-auth configmap 
+aws manages auth configmap , this will be available in admin namespace i.e kube-system
+to see it use below command --
+kubectl get configmap aws-auth -n kube-system
+
+now copy it & we have to edit it--
+create new file in repo & then edit it & apply it
+
+check aws documentation to know how to edit it --
+search -- edit aws auth configmap
+we have to add mapusers section below maproles
+in mapusers we are adding suresh to roboshop-trainee group
+in mapusers mention role name & mention role arn & apply this config
+
+03-aws-configmap.yaml          
+=====================
+apiVersion: v1
+data:
+  mapRoles: |
+    - rolearn: arn:aws:iam::160885265516:role/eksctl-roboshop-nodegroup-spot-NodeInstanceRole-t3NsVQtbw1iI
+      groups:
+      - system:bootstrappers
+      - system:nodes
+      username: system:node:{{EC2PrivateDNSName}}
+  mapUsers: |
+    - groups:
+      - roboshop-trainee
+      userarn: arn:aws:iam::160885265516:user/suresh
+      username: suresh
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-04-15T02:15:39Z"
+  name: aws-auth
+  namespace: kube-system
+  uid: 8af307e2-efaf-413c-98f5-c2726eb750dc
+
+
+kubectl apply -f 03-aws-configmap.yaml
+ignore warnings in output
+
+verify --
+kubectl get configmap aws-auth -n kube-system -o yaml
+aws makes some changes after applying 
+
+4. now we have to inform roboshop team that config is done
+there will be a separate instance for roboshop project -- they have to connect to it & login as sowjanya & check
+
+now create one instance -- devops-ami
+select allow-all sg
+create instance & connect to it
+
+now install kubectl in it --
+curl -O https://s3.us-west-2.amazonaws.com/amazoneks/1.35.3/2026-04-08/bin/linux/amd64/kubectl
+chmod +x ./kubectl
+mkdir -p $HOME/bin && cp ./kubectl $HOME/bin/kubectl && export PATH=$HOME/bin:$PATH
+
+now run --
+aws configure
+
+create separate credentials for sowjanya
+goto IAM -- select sowjanya user --
+create access key & secret access key
+
+run below command --
+aws eks update-kubeconfig --region us-east-1 --name roboshop
+
+sowjanya has access to roboshop cluster & authenticates & checks the cluster , by this a file will be generated i.e /home/ec2-user/.kube/config
+whenever u run kubectl command -- this file /home/ec2-user/.kube/config goes & checks whether u have access , if u have access then only response comes
+
+cat .kube/config
+
+kubectl get pods -n roboshop
+we can access only pods in roboshop namespace
+
+kubectl get deployments -n roboshop
+forbidden error comes because sowjanya does not have access to deployments
+
+by this we have successfully created role for trainee with read access in roboshop namespace     		
+
+next lets see creation of role for team lead --
+create a file 
+for admin we have to give access to all api groups & all resources & all action on those resources in roboshop namespace
+give role name as roboshop-admin
+
+
+04-roboshop-admin.yaml
+======================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: roboshop
+  name: roboshop-admin
+# permissions
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+
+next we will create role binding
+create new file -- mention role binding name as roboshop-admin & create one user Ramesh & add him to roboshop-admin
+
+open IAM -- create user -- name -- Ramesh -- attach roboshopEKSclusterdescribe policy -- create user
+
+05-admin-rolebinding.yaml
+=========================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: roboshop-admin
+  namespace: roboshop
+subjects:
+- kind: User
+  name: ramesh
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role 
+  name: roboshop-admin 
+  apiGroup: rbac.authorization.k8s.io
+
+now apply the above config --
+kubectl apply -f 04-roboshop-admin.yaml
+kubectl apply -f 05-admin-rolebinding.yaml
+
+now we should integrate 
+open aws-auth-configmap & create one more group with name roboshop-admin
+error is coming with resource version so we have avoided it 
+resource version will be updated with every new apply so don't use it
+
+03-aws-auth.yaml
+================
+apiVersion: v1
+data:
+  mapRoles: |
+    - rolearn: arn:aws:iam::160885265516:role/eksctl-roboshop-nodegroup-spot-NodeInstanceRole-t3NsVQtbw1iI
+      groups:
+      - system:bootstrappers
+      - system:nodes
+      username: system:node:{{EC2PrivateDNSName}}
+  mapUsers: |
+    - groups:
+      - roboshop-trainee
+      userarn: arn:aws:iam::160885265516:user/suresh
+      username: suresh
+    - groups:
+      - roboshop-admin
+      userarn: arn:aws:iam::160885265516:user/ramesh
+      username: ramesh
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-04-15T02:15:39Z"
+  name: aws-auth
+  namespace: kube-system
+  uid: 8af307e2-efaf-413c-98f5-c2726eb750dc
+
+now apply --
+kubectl apply -f 03-aws-auth.yaml
+
+verify --
+kubectl get configmap aws-auth -n kube-system -o yaml
+
+lets test now --
+open IAM -- create security credentials for Ramesh -- create access key & secret access key 
+
+run -- 
+aws configure
+give access key & secret access key of Ramesh
+
+to make sure that current user is Ramesh use below command --
+aws sts get-caller-identity
+if it is Ramesh u can see Ramesh in output
+
+aws eks update-kubeconfig --region us-east-1 --name roboshop 
+kubectl get deployments -n roboshop
+in output u can see deployments in roboshop cluster if exists
+
+u can apply deployments because Ramesh is admin
+git clone <https-url-of-roboshop-k8s>
+cd roboshop-k8s
+kubectl apply -f mongodb.yaml
+kubectl get deployments -n roboshop
+
+
+kubectl api-resources | grep pv
+we can see pv is namespace level resource
+
+role & role binding are namespace level objects
+
+to get cluster level access we need to create cluster role & cluster role binding
+to provide cluster level access we need to create cluster role
+
+open 04-roboshop-admin.yaml & write role definition related to cluster
+for admin we are creating role to access storageclasses & persistent volumes
+here storage class api group is storage.k8s.io , in that admin can access all versions in storage classes 
+
+04-roboshop-admin.yaml
+======================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: roboshop
+  name: roboshop-admin
+# permissions
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  # "namespace" omitted since ClusterRoles are not namespaced
+  name: roboshop-cluster-reader
+rules:
+- apiGroups: [""]
+  #
+  # at the HTTP level, the name of the resource for accessing 
+  # objects is "persistentvolumes"
+  resources: ["persistentvolumes"]
+  verbs: ["get", "watch", "list"]
+- apiGroups: ["storage.k8s.io"]
+  #
+  # at the HTTP level, the name of the resource for accessing   
+  # objects is "storageclasses"
+  resources: ["storageclasses"]
+  verbs: ["get", "watch", "list"]
+
+lets add cluster role binding for Ramesh user
+role binding names is roboshop-cluster-reader & user is Ramesh
+
+05-roboshop-admin-rb.yaml
+=========================
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: roboshop-admin
+  namespace: roboshop
+subjects:
+- kind: User
+  name: ramesh
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role 
+  name: roboshop-admin 
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+# This cluster role binding allows anyone in the "manager" group to read secrets in any namespace.
+kind: ClusterRoleBinding
+metadata:
+  name: roboshop-cluster-reader
+subjects:
+- kind: User
+  name: ramesh
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: roboshop-cluster-reader
+  apiGroup: rbac.authorization.k8s.io
+
+
+before apply check --
+kubectl get pv 
+no access
+lets apply above config --
+kubectl apply -f 04-roboshop-admin.yaml
+kubectl apply -f 05-roboshop-admin-rb.yaml
+kubectl get pv
+now u can access pv , if pv's exists u can see them
+
+lets create 2 more trainees -- john , Raheem
+and attach roboshopEKSClusterDescribe policy to users and create users
+
+for these trainees roboshop-trainee role already exists 
+we need to modify role binding only
+lets create role binding for trainee
+in role binding we are adding roboshop-trainee group , previously we have added user only
+
+
+06-tarinee-role-binding.yaml
+============================
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: RoleBinding
+metadata:
+  name: roboshop-trainee
+  namespace: roboshop
+subjects:
+# You can specify more than one "subject"
+- kind: Group
+  name: roboshop-trainee # "name" is case sensitive
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: Role #this must be Role or ClusterRole
+  name: roboshop-trainee # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+
+now open aws-auth file & add john & Raheem to roboshop-trainee group
+by this john & Raheem will get cluster access mentioned in role-binding
+
+03-aws-auth.yaml
+================
+apiVersion: v1
+data:
+  mapRoles: |
+    - rolearn: arn:aws:iam::160885265516:role/eksctl-roboshop-nodegroup-spot-NodeInstanceRole-t3NsVQtbw1iI
+      groups:
+      - system:bootstrappers
+      - system:nodes
+      username: system:node:{{EC2PrivateDNSName}}
+  mapUsers: |
+    - groups:
+      - roboshop-trainee
+      userarn: arn:aws:iam::160885265516:user/suresh
+      username: suresh
+    - groups:
+      - roboshop-trainee
+      userarn: arn:aws:iam::160885265516:user/john
+      username: john
+    - groups:
+      - roboshop-trainee
+      userarn: arn:aws:iam::160885265516:user/rahim
+      username: rahim
+    - groups:
+      - roboshop-admin
+      userarn: arn:aws:iam::160885265516:user/ramesh
+      username: ramesh
+kind: ConfigMap
+metadata:
+  creationTimestamp: "2026-04-15T02:15:39Z"
+  name: aws-auth
+  namespace: kube-system
+  uid: 8af307e2-efaf-413c-98f5-c2726eb750dc
+
+
+kubectl apply -f 06-tarinee-role-binding.yaml
+kubectl apply -f 03-aws-auth.yaml
+
+lets see what happens when john login
+for that create access key & secret access key for john
+run --
+aws configure
+give access key & secret access of john
+verify the current user --
+aws sts get-caller-identity
+
+check --
+kubectl get pods -n roboshop
+kubectl get pods 
+he cannot see resources in default namespace so error comes
+
+there is no system to map iam group with eks group
+if john bemoce team lead we will add john to admin group
+
+before starting a project , we will fix the roles
+trainee == pod-reader
+juniours == deployer -> he can create and read
+senior == checker -> create, update, read
+admin == admin -> create, read, update, delete
+
+john has eksclusterdescribe permission to roboshop namespace -- so authentication will be created 
+( aws eks update-kubeconfig --region us-east-1 --name roboshop )
+if john does not have access authentication will not be created ( throws erorr like not authorized to perform & means he cannot even authenticate ) 
+when john issues a command checks aws-auth  & checks in role & role binding -- he can get response otherwise error will be thrown
+	
+
+service account 
+===============
+just like system user in linux
+
+consider that a pod is running in eks , this pod wants to access the secret in secret manager, how to access -- by placing our credentials in this pod & accessing the secret from those credentials is not safe , because everyone can see those credentials & also when we left organization , the access will lost , so these two are not safe options
+
+here we can use service accounts , these are like system users in linux , we will give access to service accounts , 
+
+we will attach permissions to access secret in secrets manager to iam role , 
+pods run with service accounts (used for non humans),
+we will match service accounts with IAM role,
+
+when we create namespace in k8s , one service account will be created with name default , command to check --
+kubectl get sa -n roboshop
+
+open k9s -- goto roboshop namspace -- describe mongodb -- this pod runs with default service account
+this default service account does not contains any access
+
+now we have to do --
+now create service account
+create IAM role & attach permission
+run pod with service account
+
+to map k8s with IAM role we need OIDC (open ID connect) provider 
+
+OIDC -- used to provide authentication protocol between two systems , allowing users to sign in to third-party applications securely without sharing their passwords
+
+search -- eks OIDC
+this is one time activity, admins will setup this intially
+command --
+eksctl utils associate-iam-oidc-provider --cluster roboshop --approve
+
+
+for example consider that we have a secret -- /roboshop/dev/mysql_root_password in secrets manager
+we have to create policy to access secret in /roboshop/dev/mysql_root_password
+
+goto IAM -- ploicies -- create policy -- select a service -- secret manager -- actions allowed -- read -- get & describe secret value -- specific -- add arn -- specify arns -- resource in -- this account 
+resource region -- us-east-1
+resource secret -- /roboshop/dev/mysql_root_password
+resource arn -- mention arn -- add arns --next
+policy name -- RoboshopMysqlSecretReader -- create policy
+now copy policy arn 
+
+search -- eks service account create
+command -- 
+eksctl create iamserviceaccount \
+--name roboshop-secret-reader \
+--namespace roboshop \
+--cluster roboshop \
+--attach-policy-arn  <policy-arn> \
+--approve
+
+here this service account only created IAM role
+
+verify --
+kubectl get sa -n roboshop
+in output u can see roboshop-secret-reader service account
+
+kubectl get sa roboshop-secret-reader -o yaml -n roboshop
+in output u can see annotations , in annotations we can see arn of role -- these are used to select external resources
+to match service account with role we need annotations
+this role is created by k8s automatically & assign the policy which u have mentioned
+
+now goto IAM -- roles -- name mentioned in arn -- check permissions
+
+if we want we can create the role manually , we can create service account yaml by ourselves & we need to mention the annotation correctly as shown in the output of above command
+
+to check access is there or not -- we need aws cli 
+so create a pod with aws cli image , take image from docker hub (search -- aws cli)
+
+commands --
+k9s
+describe mongodb -- press y -- u can see yaml code -- spec -- u can see service account name  -- copy the syntax
+write pod definition & mention service account name 
+
+08-pod.yaml
+===========
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aws-cli
+  namespace: roboshop
+spec:
+  serviceAccountName: roboshop-secret-reader
+  containers:
+  - name: aws-cli
+    image: amazon/aws-cli
+    command: ["sleep","2000"]
+
+run the pod --
+kubectl apply -f 08-pod.yaml
+kubectl get pods -n roboshop
+k9s -- goto roboshop namespace -- take shell --
+
+give below aws cli command to get secret value --
+aws secrets manager get-secret-value --secret-id roboshop/dev/mysql_root_password 
+
+u can see the secret value in output
+
+try accessing another secret --
+aws secrets manager get-secret-value --secret-id roboshop/dev/mysql_password
+
+it will throw an error like -- not authorized to perform 
+
+
+ 
+
